@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="ee44f18d-45c6-4e94-a86e-782d6bbc1c0f" name="更改" comment="">
+      <change beforePath="$PROJECT_DIR$/client/node_modules/.vite/deps/_metadata.json" beforeDir="false" afterPath="$PROJECT_DIR$/client/node_modules/.vite/deps/_metadata.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/djcp.db-shm" beforeDir="false" afterPath="$PROJECT_DIR$/server/djcp.db-shm" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/djcp.db-wal" beforeDir="false" afterPath="$PROJECT_DIR$/server/djcp.db-wal" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test-reports/last_checked_commit" beforeDir="false" afterPath="$PROJECT_DIR$/test-reports/last_checked_commit" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 1,
+  "fromUser": false
+}]]></component>
+  <component name="ProjectId" id="3ERvLVQH5iL2FBCm6cxqgdFqIVx" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "git-widget-placeholder": "main",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="默认任务">
+      <changelist id="ee44f18d-45c6-4e94-a86e-782d6bbc1c0f" name="更改" comment="" />
+      <created>1780154141758</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1780154141758</updated>
+      <workItem from="1780154143101" duration="13000" />
+    </task>
+    <servers />
+  </component>
+</project>
