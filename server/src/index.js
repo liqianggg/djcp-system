@@ -30,7 +30,7 @@ app.use(globalLimiter);
 // 登录接口速率限制
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 5,
   skipSuccessfulRequests: true,
   message: { success: false, message: '登录尝试过于频繁，请15分钟后再试' }
 });

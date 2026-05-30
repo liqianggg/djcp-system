@@ -135,23 +135,47 @@ else
   echo -e " ${GREEN}✓${NC}"
   record_test "S2" "SQL 注入-OR 1=1" "HIGH" "PASS" "注入被阻止"
 fi
+# S8: Token 安全性 - JWT
+echo -n "  S8 Token 安全..."
+LOGIN_RESP=$(curl -s -X POST $API_BASE/api/login \
+  -H "Content-Type: application/json" \
+  -d '''{"username":"sysadmin","password":"admin123"}''')
+TOKEN=$(echo "$LOGIN_RESP" | grep -o '''"token":"[^"]*"''' | cut -d'''"''' -f4)
+if [ -n "$TOKEN" ]; then
+  if echo "$TOKEN" | grep -qE '''^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'''; then
+    echo -e " ${GREEN}✓ (JWT)${NC}"
+    record_test "S8" "Token 安全性" "MEDIUM" "PASS" "使用 JWT 格式 token"
+  elif echo "$TOKEN" | grep -qE '''^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'''; then
+    echo -e " ${YELLOW}⚠ UUID 格式${NC}"
+    record_test "S8" "Token 安全性" "MEDIUM" "FAIL" "使用 UUID 而非 JWT，无法验证完整性和过期"
+  else
+    echo -e " ${GREEN}✓${NC}"
+    record_test "S8" "Token 安全性" "MEDIUM" "PASS" "Token 格式正常"
+  fi
+else
+  echo -e " ${RED}✗ 登录失败${NC}"
+  record_test "S8" "Token 安全性" "MEDIUM" "FAIL" "无法登录获取 token"
+fi
+
 
 # S3: 暴力破解 - 速率限制
 echo -n "  S3 暴力破解防护..."
-BRUTE_START=$(date +%s)
+RATE_LIMITED=0
 for i in $(seq 1 10); do
-  curl -s -X POST $API_BASE/api/login \
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST $API_BASE/api/login \
     -H "Content-Type: application/json" \
-    -d "{\"username\":\"sysadmin\",\"password\":\"wrong$i\"}" > /dev/null
+    -d "{\"username\":\"sysadmin\",\"password\":\"wrong$i\"}")
+  if [ "$HTTP_CODE" = "429" ]; then
+    RATE_LIMITED=1
+    break
+  fi
 done
-BRUTE_END=$(date +%s)
-BRUTE_TIME=$((BRUTE_END - BRUTE_START))
-if [ $BRUTE_TIME -lt 2 ]; then
-  echo -e " ${RED}✗ 无速率限制${NC}"
-  record_test "S3" "暴力破解防护" "HIGH" "FAIL" "10次连续请求无限制，耗时${BRUTE_TIME}s"
-else
+if [ $RATE_LIMITED -eq 1 ]; then
   echo -e " ${GREEN}✓${NC}"
-  record_test "S3" "暴力破解防护" "HIGH" "PASS" "存在速率限制或延迟"
+  record_test "S3" "暴力破解防护" "HIGH" "PASS" "第${i}次请求触发速率限制(429)"
+else
+  echo -e " ${RED}✗ 无速率限制${NC}"
+  record_test "S3" "暴力破解防护" "HIGH" "FAIL" "10次连续请求未触发限制"
 fi
 
 # S4: 未授权访问
@@ -193,7 +217,7 @@ fi
 
 # S7: CORS 配置
 echo -n "  S7 CORS 配置..."
-CORS_RESP=$(curl -s -I -X OPTIONS $API_BASE/api/login \
+CORS_RESP=$(curl -s --max-time 5 -D - -o /dev/null -X OPTIONS $API_BASE/api/login \
   -H "Origin: http://evil.com" \
   -H "Access-Control-Request-Method: POST" 2>&1)
 if echo "$CORS_RESP" | grep -qi "Access-Control-Allow-Origin:.*\*"; then
@@ -209,7 +233,7 @@ fi
 
 # S9: 安全响应头
 echo -n "  S9 安全响应头..."
-HEADERS=$(curl -s --max-time 5 -I $API_BASE/api/login 2>&1)
+HEADERS=$(curl -s --max-time 5 -D - -o /dev/null -X POST $API_BASE/api/login -H "Content-Type: application/json" -d '{"username":"test","password":"test"}' 2>&1)
 MISSING_HEADERS=""
 if ! echo "$HEADERS" | grep -qi "X-Content-Type-Options"; then
   MISSING_HEADERS="$MISSING_HEADERS X-Content-Type-Options"
