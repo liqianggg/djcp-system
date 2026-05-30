@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2 } from 'lucide-react';
+import { Plus, Edit2, Upload, X, Image, Search, Filter } from 'lucide-react';
 
 import { apiGet, apiPost, apiPut, apiDelete, apiUpload, hasPermission } from '../api';
 
@@ -11,28 +11,77 @@ export default function Filing() {
   const [filings, setFilings] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [evidences, setEvidences] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [filterYear, setFilterYear] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [years, setYears] = useState([]);
   const [form, setForm] = useState({
     system_id: '', filing_number: '', filing_authority: '', filing_date: '',
     approval_date: '', filing_status: 'preparing', filing_document: '', remarks: ''
   });
 
   const loadFilings = () => {
-    apiGet('/api/filings').then(setFilings);
+    const params = new URLSearchParams();
+    if (filterYear) params.set('year', filterYear);
+    if (filterStatus) params.set('status', filterStatus);
+    apiGet('/api/filings?' + params).then(d => d && setFilings(d));
   };
 
   useEffect(() => {
     apiGet('/api/systems').then(setSystems);
+    apiGet('/api/filings/years').then(y => y && setYears(y));
     loadFilings();
-  }, []);
+  }, [filterYear, filterStatus]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const url = editing ? API + '/api/filings/' + editing.id : API + '/api/filings';
+    const url = editing ? '/api/filings/' + editing.id : '/api/filings';
     const method = editing ? 'PUT' : 'POST';
     await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('djcp_token')}` }, body: JSON.stringify(form) });
     setShowModal(false); setEditing(null);
     setForm({ system_id: '', filing_number: '', filing_authority: '', filing_date: '', approval_date: '', filing_status: 'preparing', filing_document: '', remarks: '' });
     loadFilings();
+  };
+
+  const loadEvidences = async (filingId) => {
+    const res = await fetch('/api/filings/' + filingId + '/evidences', {
+      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('djcp_token') }
+    });
+    if (res.ok) setEvidences(await res.json());
+  };
+
+  const handleEvidenceUpload = async (filingId) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.onchange = async (e) => {
+      const files = e.target.files;
+      if (!files.length) return;
+      setUploading(true);
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append('file', file);
+        await fetch('/api/filings/' + filingId + '/evidences', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('djcp_token') },
+          body: fd
+        });
+      }
+      setUploading(false);
+      loadEvidences(filingId);
+    };
+    input.click();
+  };
+
+  const handleEvidenceDelete = async (filingId, evId) => {
+    if (!confirm('确定删除该备案证明图片吗？')) return;
+    await fetch('/api/filings/' + filingId + '/evidences/' + evId, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('djcp_token') }
+    });
+    loadEvidences(filingId);
   };
 
   const handleEdit = (f) => {
@@ -43,6 +92,7 @@ export default function Filing() {
       filing_document: f.filing_document || '', remarks: f.remarks || ''
     });
     setShowModal(true);
+    loadEvidences(f.id);
   };
 
   return (
@@ -56,6 +106,25 @@ export default function Filing() {
 
       <div className="page-body">
         <div className="card">
+        <div className="search-bar" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <Filter size={16} style={{ color: 'var(--text-secondary)' }} />
+            <select className="form-control" value={filterYear} onChange={e => setFilterYear(e.target.value)} style={{ minWidth: '100px' }}>
+              <option value="">全部年份</option>
+              {years.map(y => <option key={y} value={y}>{y}年</option>)}
+            </select>
+            <select className="form-control" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ minWidth: '120px' }}>
+              <option value="">全部状态</option>
+              {Object.entries(STATUS_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+            <span>总计 <strong>{filings.length}</strong> 条</span>
+            <span style={{color:'#065f46'}}>已审批 <strong>{filings.filter(f=>f.filing_status==='approved').length}</strong></span>
+            <span style={{color:'#1d4ed8'}}>已提交 <strong>{filings.filter(f=>f.filing_status==='submitted').length}</strong></span>
+            <span style={{color:'#991b1b'}}>已驳回 <strong>{filings.filter(f=>f.filing_status==='rejected').length}</strong></span>
+          </div>
+        </div>
           <div className="table-wrapper">
             <table>
               <thead>
@@ -112,7 +181,7 @@ export default function Filing() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               {editing ? '编辑备案' : '新建备案'}
-              <button className="btn btn-sm" onClick={() => setShowModal(false)}>✕</button>
+              <button className="btn btn-sm" onClick={() => { setShowModal(false); setEvidences([]); }}>✕</button>
             </div>
             <form onSubmit={handleSubmit}>
               <div className="modal-body">
@@ -160,6 +229,43 @@ export default function Filing() {
                   <textarea className="form-control" value={form.remarks} onChange={e => setForm({...form, remarks: e.target.value})} placeholder="其他需要说明的事项..."></textarea>
                 </div>
               </div>
+                {editing && (
+                  <div className="form-group">
+                    <label>📸 备案证明图片</label>
+                    <div style={{ border: '1px dashed var(--border)', borderRadius: '8px', padding: '12px', background: '#fafafa' }}>
+                      <button type="button" className="btn btn-sm" style={{ marginBottom: '12px' }} onClick={() => handleEvidenceUpload(editing.id)} disabled={uploading}>
+                        <Upload size={14} /> {uploading ? '上传中...' : '上传证明图片'}
+                      </button>
+                      {evidences.length > 0 ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '8px' }}>
+                          {evidences.map(ev => (
+                            <div key={ev.id} style={{ position: 'relative', border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden', background: '#fff' }}>
+                              <img
+                                src={'/api/filings/' + editing.id + '/evidences/' + ev.id + '/file?token=' + localStorage.getItem('djcp_token')}
+                                alt={ev.original_name}
+                                style={{ width: '100%', height: '90px', objectFit: 'cover', cursor: 'pointer' }}
+                                onClick={() => window.open('/api/filings/' + editing.id + '/evidences/' + ev.id + '/file?token=' + localStorage.getItem('djcp_token'), '_blank')}
+                                title={ev.original_name}
+                              />
+                              <button type="button"
+                                onClick={() => handleEvidenceDelete(editing.id, ev.id)}
+                                style={{ position: 'absolute', top: '3px', right: '3px', width: '22px', height: '22px', borderRadius: '50%', background: 'rgba(239,68,68,0.85)', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}
+                                title="删除"
+                              ><X size={12} /></button>
+                              <div style={{ padding: '4px 6px', fontSize: '11px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ev.original_name}>
+                                {ev.original_name.length > 14 ? ev.original_name.slice(0, 14) + '...' : ev.original_name}
+                              </div>
+                              <div style={{ padding: '0 6px 4px', fontSize: '10px', color: '#999' }}>{ev.uploaded_by}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: 0 }}>暂无证明图片，点击上方按钮上传</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
               <div className="modal-footer">
                 <button type="button" className="btn" onClick={() => setShowModal(false)}>取消</button>
                 <button type="submit" className="btn btn-primary">{editing ? '保存修改' : '提交备案'}</button>

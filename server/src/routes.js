@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
+const XLSX = require('xlsx');
 const ldap = require('ldapjs');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -130,6 +131,84 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => cb(null, uuidv4() + path.extname(file.originalname))
 });
 const upload = multer({ storage });
+
+// ===================== 差距分析文件导入 =====================
+router.post('/api/gap-analyses/import', requirePermission('gap:create'), upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: '请上传文件' });
+
+  const db = getDb();
+  let items = [];
+
+  try {
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const filePath = path.join(uploadDir, req.file.filename);
+
+    if (ext === '.csv') {
+      // Parse CSV
+      const csvData = fs.readFileSync(filePath, 'utf8');
+      const rows = csvData.split('\n').filter(line => line.trim());
+      const headers = rows[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      for (let i = 1; i < rows.length; i++) {
+        const vals = rows[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const row = {};
+        headers.forEach((h, j) => { row[h] = vals[j] || ''; });
+        if (Object.values(row).some(v => v)) items.push(row);
+      }
+    } else {
+      // Parse Excel
+      const workbook = XLSX.readFile(filePath);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      items = data;
+    }
+
+    // Map columns to gap item fields (support Chinese & English headers)
+    const colMap = {
+      '类别': 'requirement_category', 'category': 'requirement_category', '安全类别': 'requirement_category',
+      '编号': 'requirement_id', 'id': 'requirement_id', '要求编号': 'requirement_id', '控制点编号': 'requirement_id',
+      '描述': 'requirement_desc', 'desc': 'requirement_desc', '要求描述': 'requirement_desc', '要求项': 'requirement_desc', '控制点': 'requirement_desc',
+      '期望值': 'expected_value', 'expected': 'expected_value', '期望': 'expected_value', '应满足的要求': 'expected_value',
+      '实际值': 'actual_value', 'actual': 'actual_value', '实际情况': 'actual_value', '现状': 'actual_value',
+      '风险等级': 'risk_level', 'risk': 'risk_level', '风险': 'risk_level',
+      '符合': 'is_compliant', 'compliant': 'is_compliant', '是否合规': 'is_compliant',
+      '备注': 'remarks', 'remark': 'remarks', '说明': 'remarks',
+    };
+
+    const result = items.map(row => {
+      const item = {
+        requirement_category: '',
+        requirement_id: '',
+        requirement_desc: '',
+        expected_value: '',
+        actual_value: '',
+        risk_level: 'medium',
+        is_compliant: 0,
+        remarks: ''
+      };
+      for (const [key, val] of Object.entries(row)) {
+        const mapped = colMap[key.trim()] || colMap[key.trim().toLowerCase()];
+        if (mapped) {
+          if (mapped === 'is_compliant') {
+            const v = String(val).toLowerCase();
+            item[mapped] = (v === '是' || v === 'yes' || v === 'true' || v === '1' || v === '符合') ? 1 : 0;
+          } else {
+            item[mapped] = String(val);
+          }
+        }
+      }
+      return item;
+    }).filter(item => item.requirement_category || item.requirement_id);
+
+    // Clean up temp file
+    try { fs.unlinkSync(filePath); } catch (_) {}
+
+    auditLog(db, req.user.id, req.user.username, req.user.real_name, 'import', 'gap_analysis', 'file', null, `导入差距分析文件: ${req.file.originalname}, 识别 ${result.length} 项`);
+    res.json({ success: true, count: result.length, items: result });
+  } catch (e) {
+    try { fs.unlinkSync(path.join(uploadDir, req.file.filename)); } catch (_) {}
+    res.status(400).json({ error: '文件解析失败: ' + e.message });
+  }
+});
 
 // ===================== 认证 =====================
 router.post('/api/login', async (req, res) => {
@@ -409,9 +488,23 @@ router.get('/api/classifications/:id/report', (req, res) => {
 });
 
 // ===================== 备案管理 =====================
+
+// 备案年份列表
+router.get('/api/filings/years', requirePermission('filing:view'), (req, res) => {
+  const db = getDb();
+  const years = db.prepare("SELECT DISTINCT strftime('%Y', filing_date) as year FROM filings WHERE filing_date IS NOT NULL ORDER BY year DESC").all();
+  res.json(years.map(y => y.year));
+});
+
 router.get('/api/filings', requirePermission('filing:view'), (req, res) => {
   const db = getDb();
-  res.json(db.prepare('SELECT f.*, s.name as system_name FROM filings f JOIN systems s ON f.system_id = s.id ORDER BY f.created_at DESC').all());
+  const { year, status } = req.query;
+  let sql = 'SELECT f.*, s.name as system_name FROM filings f JOIN systems s ON f.system_id = s.id WHERE 1=1';
+  const params = [];
+  if (year) { sql += " AND strftime('%Y', f.filing_date) = ?"; params.push(year); }
+  if (status) { sql += ' AND f.filing_status = ?'; params.push(status); }
+  sql += ' ORDER BY f.filing_date DESC';
+  res.json(db.prepare(sql).all(...params));
 });
 
 router.post('/api/filings', requirePermission('filing:create'), (req, res) => {
@@ -436,6 +529,61 @@ router.put('/api/filings/:id', requirePermission('filing:edit'), (req, res) => {
     if (filing) db.prepare("UPDATE systems SET status='filed', updated_at=CURRENT_TIMESTAMP WHERE id=?").run(filing.system_id);
   }
   auditLog(db, req.user.id, req.user.username, req.user.real_name, 'update', 'filing', 'filing', req.params.id, `更新备案状态: ${filing_status}`);
+  res.json({ success: true });
+});
+
+// ===================== 备案证明图片 =====================
+router.post('/api/filings/:id/evidences', requirePermission('filing:edit'), upload.single('file'), (req, res) => {
+  const db = getDb();
+  const filing = db.prepare('SELECT id FROM filings WHERE id=?').get(req.params.id);
+  if (!filing) return res.status(404).json({ error: '备案记录不存在' });
+  if (!req.file) return res.status(400).json({ error: '请选择图片文件' });
+
+  const result = db.prepare('INSERT INTO filing_evidences (filing_id, filename, original_name, file_size, mime_type, uploaded_by) VALUES (?,?,?,?,?,?)')
+    .run(req.params.id, req.file.filename, req.file.originalname, req.file.size, req.file.mimetype, req.user.real_name || req.user.username);
+
+  auditLog(db, req.user.id, req.user.username, req.user.real_name, 'upload_evidence', 'filing', 'filing', req.params.id, `上传备案证明: ${req.file.originalname}`);
+  res.json({ id: result.lastInsertRowid, filename: req.file.filename, original_name: req.file.originalname, file_size: req.file.size, uploaded_by: req.user.real_name || req.user.username, uploaded_at: new Date().toISOString() });
+});
+
+router.get('/api/filings/:id/evidences', requirePermission('filing:view'), (req, res) => {
+  const db = getDb();
+  res.json(db.prepare('SELECT * FROM filing_evidences WHERE filing_id=? ORDER BY uploaded_at DESC').all(req.params.id));
+});
+
+router.get('/api/filings/:id/evidences/:eid/file', (req, res) => {
+  const token = req.query.token || (req.headers.authorization || '').replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: '未提供认证令牌' });
+  const db = getDb();
+  let userId = null;
+  try { const d = jwt.verify(token, JWT_SECRET); userId = d.id; } catch(_) {
+    const s = db.prepare("SELECT user_id FROM sessions WHERE token=? AND expires_at > datetime('now')").get(token);
+    if (s) userId = s.user_id;
+  }
+  if (!userId) return res.status(401).json({ error: '令牌无效或已过期' });
+
+  const evidence = db.prepare('SELECT * FROM filing_evidences WHERE id=? AND filing_id=?').get(req.params.eid, req.params.id);
+  if (!evidence) return res.status(404).json({ error: '图片不存在' });
+
+  const filePath = path.join(uploadDir, evidence.filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: '文件不存在' });
+
+  res.setHeader('Content-Type', evidence.mime_type || 'image/png');
+  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(evidence.original_name)}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  fs.createReadStream(filePath).pipe(res);
+});
+
+router.delete('/api/filings/:id/evidences/:eid', requirePermission('filing:edit'), (req, res) => {
+  const db = getDb();
+  const evidence = db.prepare('SELECT * FROM filing_evidences WHERE id=? AND filing_id=?').get(req.params.eid, req.params.id);
+  if (!evidence) return res.status(404).json({ error: '图片不存在' });
+
+  const filePath = path.join(uploadDir, evidence.filename);
+  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+  db.prepare('DELETE FROM filing_evidences WHERE id=?').run(req.params.eid);
+  auditLog(db, req.user.id, req.user.username, req.user.real_name, 'delete_evidence', 'filing', 'filing', req.params.id, `删除备案证明: ${evidence.original_name}`);
   res.json({ success: true });
 });
 

@@ -77,6 +77,10 @@ function initPermissions() {
     ['permission:manage','管理权限','permission','分配/修改角色权限'],
     ['audit:view','查看审计日志','audit','查看操作审计日志'],
     ['audit:export','导出审计日志','audit','导出审计日志'],
+    ['classification:report','查看定级报告','classification','生成和查看定级报告'],
+    ['filing:upload_evidence','上传备案证明','filing','上传备案证明材料图片'],
+    ['filing:delete_evidence','删除备案证明','filing','删除备案证明图片'],
+    ['gap:import','导入差距分析','gap','从Excel/CSV文件导入差距分析数据'],
   ];
   for (const p of perms) stmt.run(...p);
 }
@@ -92,19 +96,19 @@ function initRolePermissions() {
   for (const code of allPerms) rpStmt.run('system_admin', code);
 
   // 安全管理员
-  const secAdminPerms = ['dashboard:view','system:view','system:create','system:edit','system:delete','classification:view','classification:create','filing:view','filing:create','filing:edit','gap:view','gap:create','rectification:view','rectification:create','rectification:edit','rectification:status','assessment:view','assessment:create','document:view','document:upload','document:edit','document:delete','document:download','user:view','user:create','user:edit','user:reset_password','permission:view','permission:manage'];
+  const secAdminPerms = ['dashboard:view','system:view','system:create','system:edit','system:delete','classification:view','classification:create','classification:report','filing:view','filing:create','filing:edit','filing:upload_evidence','filing:delete_evidence','gap:view','gap:create','gap:import','rectification:view','rectification:create','rectification:edit','rectification:status','assessment:view','assessment:create','document:view','document:upload','document:edit','document:delete','document:download','user:view','user:create','user:edit','user:reset_password','permission:view','permission:manage'];
   for (const code of secAdminPerms) rpStmt.run('security_admin', code);
 
   // 安全审计员
-  const auditorPerms = ['dashboard:view','system:view','classification:view','filing:view','gap:view','rectification:view','assessment:view','document:view','document:download','user:view','permission:view','audit:view','audit:export'];
+  const auditorPerms = ['dashboard:view','system:view','classification:view','classification:report','filing:view','gap:view','rectification:view','assessment:view','document:view','document:download','user:view','permission:view','audit:view','audit:export'];
   for (const code of auditorPerms) rpStmt.run('security_auditor', code);
 
   // 操作员
-  const operatorPerms = ['dashboard:view','system:view','system:create','system:edit','classification:view','classification:create','filing:view','filing:create','filing:edit','gap:view','gap:create','rectification:view','rectification:create','rectification:edit','rectification:status','assessment:view','assessment:create','document:view','document:upload','document:edit','document:download'];
+  const operatorPerms = ['dashboard:view','system:view','system:create','system:edit','classification:view','classification:create','classification:report','filing:view','filing:create','filing:edit','filing:upload_evidence','filing:delete_evidence','gap:view','gap:create','gap:import','rectification:view','rectification:create','rectification:edit','rectification:status','assessment:view','assessment:create','document:view','document:upload','document:edit','document:download'];
   for (const code of operatorPerms) rpStmt.run('operator', code);
 
   // 只读用户
-  const viewerPerms = ['dashboard:view','system:view','classification:view','filing:view','gap:view','rectification:view','assessment:view','document:view','document:download'];
+  const viewerPerms = ['dashboard:view','system:view','classification:view','classification:report','filing:view','gap:view','rectification:view','assessment:view','document:view','document:download'];
   for (const code of viewerPerms) rpStmt.run('viewer', code);
 }
 

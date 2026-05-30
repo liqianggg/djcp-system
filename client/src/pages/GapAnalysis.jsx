@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, ChevronDown, ChevronRight, Eye } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, Eye, Upload, FileSpreadsheet } from 'lucide-react';
 
 import { apiGet, apiPost, apiPut, apiDelete, apiUpload, hasPermission } from '../api';
 
@@ -55,6 +55,8 @@ export default function GapAnalysis() {
   const [showModal, setShowModal] = useState(false);
   const [viewAnalysis, setViewAnalysis] = useState(null);
   const [expandedCats, setExpandedCats] = useState({});
+  const [importPreview, setImportPreview] = useState(null);
+  const [importing, setImporting] = useState(false);
   const [form, setForm] = useState({
     system_id: '', analysis_date: new Date().toISOString().split('T')[0],
     overall_score: 0, compliance_rate: 0, status: 'draft', items: []
@@ -68,6 +70,34 @@ export default function GapAnalysis() {
     apiGet('/api/systems').then(setSystems);
     loadAnalyses();
   }, []);
+
+  const handleFileImport = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImporting(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const res = await fetch("/api/gap-analyses/import", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + localStorage.getItem("djcp_token") },
+        body: fd
+      });
+      const data = await res.json();
+      if (data.success) {
+        setImportPreview(data.items);
+        setForm(prev => ({ ...prev, items: data.items }));
+        setShowModal(true);
+        setViewAnalysis(null);
+      } else {
+        alert("导入失败: " + (data.error || "未知错误"));
+      }
+    } catch(err) {
+      alert("导入失败: " + err.message);
+    }
+    setImporting(false);
+    e.target.value = "";
+  };
 
   const initItems = () => {
     const items = [];
@@ -134,6 +164,10 @@ export default function GapAnalysis() {
     <div>
       <div className="page-header">
         <h2>🔍 差距分析</h2>
+        <label className="btn" style={{cursor:"pointer", display:"inline-flex", alignItems:"center", gap:"6px", marginRight:"8px"}}>
+          <Upload size={16} /> {importing ? "识别中..." : "导入文件识别"}
+          <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileImport} style={{display:"none"}} />
+        </label>
         <button className="btn btn-primary" onClick={() => { initItems(); setShowModal(true); }}>
           <Plus size={16} /> 新建差距分析
         </button>
