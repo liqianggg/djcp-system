@@ -1,8 +1,11 @@
 node_modules/
 dist/
+.env
+*.log
 *.db
 *.db-shm
 *.db-wal
-test-reports/report-*.md
+uploads/
 .DS_Store
-*.log
+test-reports/
+/tmp/

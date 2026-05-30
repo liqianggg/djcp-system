@@ -128,7 +128,7 @@ export default function Documents() {
                     <td>
                       <div className="toolbar">
                         {d.file_path && (
-                          <a href={API + '/api/documents/' + d.id + '/download'} className="btn btn-sm" title="下载"><Download size={14} /></a>
+                          <a href={'/api/documents/' + d.id + '/download?token=' + localStorage.getItem('djcp_token')} className="btn btn-sm" title="下载"><Download size={14} /></a>
                         )}
                         <button className="btn btn-sm" onClick={() => handleEdit(d)}><Edit2 size={14} /></button>
                         <button className="btn btn-sm btn-danger" onClick={() => handleDelete(d.id)}><Trash2 size={14} /></button>

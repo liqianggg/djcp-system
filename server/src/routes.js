@@ -105,7 +105,7 @@ function requirePermission(...permCodes) {
 
       if (!session) return res.status(401).json({ error: '登录已过期' });
       if (session.status !== 'active') return res.status(403).json({ error: '账号已禁用' });
-      userInfo = { id: session.user_id, username: session.username, real_name: session.real_name, role: session.role };
+      userInfo = { id: session.user_id, username: session.username, real_name: session.real_name, role: userInfo.role };
     }
 
     // 附加用户信息到请求
@@ -113,7 +113,7 @@ function requirePermission(...permCodes) {
 
     // 检查权限
     if (permCodes.length > 0) {
-      const userPerms = db.prepare('SELECT permission_code FROM role_permissions WHERE role=?').all(session.role).map(p => p.permission_code);
+      const userPerms = db.prepare('SELECT permission_code FROM role_permissions WHERE role=?').all(userInfo.role).map(p => p.permission_code);
       const hasAll = permCodes.every(code => userPerms.includes(code));
       if (!hasAll) return res.status(403).json({ error: '权限不足', required: permCodes });
     }
@@ -555,8 +555,22 @@ router.delete('/api/documents/:id', requirePermission('document:delete'), (req, 
   res.json({ success: true });
 });
 
-router.get('/api/documents/:id/download', requirePermission('document:download'), (req, res) => {
+router.get('/api/documents/:id/download', (req, res) => {
+  // 支持 ?token= 查询参数（浏览器 <a> 标签无法传 Authorization header）
+  const token = req.query.token || (req.headers.authorization || '').replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: '未提供认证令牌' });
+
   const db = getDb();
+  // 验证 token
+  let userId = null;
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    userId = decoded.id;
+  } catch (_) {
+    const session = db.prepare("SELECT user_id FROM sessions WHERE token=? AND expires_at > datetime('now')").get(token);
+    if (session) userId = session.user_id;
+  }
+  if (!userId) return res.status(401).json({ error: '令牌无效或已过期' });
   const doc = db.prepare('SELECT * FROM documents WHERE id=?').get(req.params.id);
   if (!doc || !doc.file_path) return res.status(404).json({ error: '文件不存在' });
   const filePath = path.join(uploadDir, doc.file_path);
