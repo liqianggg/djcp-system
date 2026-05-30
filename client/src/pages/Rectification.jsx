@@ -276,10 +276,10 @@ export default function Rectification() {
                             {evidences.map(ev => (
                               <div key={ev.id} style={{ position: 'relative', border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden', background: '#fff' }}>
                                 <img
-                                  src={'/api/rectifications/' + editing.id + '/evidences/' + ev.id + '/file'}
+                                  src={'/api/rectifications/' + editing.id + '/evidences/' + ev.id + '/file?token=' + localStorage.getItem('djcp_token')}
                                   alt={ev.original_name}
                                   style={{ width: '100%', height: '90px', objectFit: 'cover', cursor: 'pointer' }}
-                                  onClick={() => window.open('/api/rectifications/' + editing.id + '/evidences/' + ev.id + '/file', '_blank')}
+                                  onClick={() => window.open('/api/rectifications/' + editing.id + '/evidences/' + ev.id + '/file?token=' + localStorage.getItem('djcp_token'), '_blank')}
                                   title={ev.original_name}
                                 />
                                 <button

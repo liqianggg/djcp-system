@@ -1,12 +1,41 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const routes = require('./routes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+// 安全响应头
+app.use(helmet());
+
+// CORS - 限制为受信任来源
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
+// 全局速率限制
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 500,
+  message: { error: '请求过于频繁，请稍后再试' }
+});
+app.use(globalLimiter);
+
+// 登录接口速率限制
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  skipSuccessfulRequests: false,
+  message: { success: false, message: '登录尝试过于频繁，请15分钟后再试' }
+});
+app.use('/api/login', loginLimiter);
+
 app.use(express.json());
 app.use(routes);
 

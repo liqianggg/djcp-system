@@ -22,27 +22,35 @@ export default function Documents() {
   });
   const [uploadFile, setUploadFile] = useState(null);
 
-  const loadDocuments = () => {
-    const params = new URLSearchParams();
-    if (filterType) params.set('doc_type', filterType);
-    fetch('/api/documents?' + params, { headers: { 'Authorization': `Bearer ${localStorage.getItem('djcp_token')}` } }).then(r => r.json()).then(docs => {
+  const loadDocuments = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (filterType) params.set('doc_type', filterType);
+      const res = await fetch('/api/documents?' + params, { headers: { 'Authorization': `Bearer ${localStorage.getItem('djcp_token')}` } });
+      if (!res.ok) { console.error('Documents fetch failed:', res.status); setDocuments([]); return; }
+      let docs = await res.json();
+      if (!Array.isArray(docs)) { setDocuments([]); return; }
       if (search) docs = docs.filter(d => d.title.toLowerCase().includes(search.toLowerCase()) || (d.system_name && d.system_name.toLowerCase().includes(search.toLowerCase())));
       setDocuments(docs);
-    });
+    } catch (err) {
+      console.error('Documents load error:', err);
+      setDocuments([]);
+    }
   };
 
   useEffect(() => {
-    apiGet('/api/systems').then(setSystems);
+    apiGet('/api/systems').then(setSystems).catch(() => {});
     loadDocuments();
   }, [filterType, search]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (editing) {
-      await fetch('/api/documents/' + editing.id, {
+      const putRes = await fetch('/api/documents/' + editing.id, {
         method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('djcp_token')}` },
         body: JSON.stringify({ title: form.title, doc_type: form.doc_type, version: form.version, status: form.status, description: form.description })
       });
+      if (!putRes.ok) { alert('保存失败: ' + putRes.status); return; }
     } else {
       const fd = new FormData();
       fd.append('system_id', form.system_id);
@@ -68,8 +76,8 @@ export default function Documents() {
 
   const handleDelete = async (id) => {
     if (!confirm('确定删除此文档吗？')) return;
-    await fetch('/api/documents/' + id, { method: 'DELETE', headers: { 'Authorization': `Bearer ${localStorage.getItem('djcp_token')}` } });
-    loadDocuments();
+    const delRes = await fetch('/api/documents/' + id, { method: 'DELETE', headers: { 'Authorization': `Bearer ${localStorage.getItem('djcp_token')}` } });
+    if (delRes.ok) loadDocuments();
   };
 
   const formatSize = (bytes) => {

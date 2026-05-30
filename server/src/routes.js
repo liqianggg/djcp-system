@@ -6,6 +6,9 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 const ldap = require('ldapjs');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || 'djcp_jwt_secret_key_2026';
 const router = express.Router();
 
 // ===================== 工具函数 =====================
@@ -14,8 +17,8 @@ function hashPassword(pwd) {
   return crypto.createHash('sha256').update(pwd + 'djcp_salt').digest('hex');
 }
 
-function generateToken() {
-  return uuidv4();
+function generateToken(user) {
+  return jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
 }
 
 
@@ -79,17 +82,34 @@ function requirePermission(...permCodes) {
     if (!token) return res.status(401).json({ error: '未登录' });
 
     const db = getDb();
-    const session = db.prepare(`
-      SELECT s.*, u.username, u.real_name, u.role, u.status
-      FROM sessions s JOIN users u ON s.user_id = u.id
-      WHERE s.token = ? AND s.expires_at > datetime('now')
-    `).get(token);
+    let userInfo = null;
 
-    if (!session) return res.status(401).json({ error: '登录已过期' });
-    if (session.status !== 'active') return res.status(403).json({ error: '账号已禁用' });
+    // 优先尝试 JWT 验证
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const user = db.prepare('SELECT id, username, real_name, role, status FROM users WHERE id=?').get(decoded.id);
+      if (user && user.status === 'active') {
+        userInfo = { id: user.id, username: user.username, real_name: user.real_name, role: user.role };
+      }
+    } catch (_jwtError) {
+      // JWT 验证失败，回退到 session 数据库查询
+    }
+
+    // 回退：Session DB 查询
+    if (!userInfo) {
+      const session = db.prepare(`
+        SELECT s.*, u.username, u.real_name, u.role, u.status
+        FROM sessions s JOIN users u ON s.user_id = u.id
+        WHERE s.token = ? AND s.expires_at > datetime('now')
+      `).get(token);
+
+      if (!session) return res.status(401).json({ error: '登录已过期' });
+      if (session.status !== 'active') return res.status(403).json({ error: '账号已禁用' });
+      userInfo = { id: session.user_id, username: session.username, real_name: session.real_name, role: session.role };
+    }
 
     // 附加用户信息到请求
-    req.user = { id: session.user_id, username: session.username, real_name: session.real_name, role: session.role };
+    req.user = userInfo;
 
     // 检查权限
     if (permCodes.length > 0) {
@@ -146,7 +166,7 @@ router.post('/api/login', async (req, res) => {
     }
   } else {
     // 本地密码认证
-    if (user.password !== password) {
+    if (!bcrypt.compareSync(password, user.password)) {
       auditLog(db, null, username, null, 'login', 'auth', 'user', null, '登录失败：用户名或密码错误', 'failure');
       return res.status(401).json({ success: false, message: '用户名或密码错误' });
     }
@@ -158,7 +178,7 @@ router.post('/api/login', async (req, res) => {
   }
 
   // 创建会话
-  const token = generateToken();
+  const token = generateToken(user);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24小时
   db.prepare('INSERT INTO sessions (user_id, token, expires_at) VALUES (?,?,?)').run(user.id, token, expiresAt);
 
@@ -431,9 +451,15 @@ router.get('/api/rectifications/:id/evidences', requirePermission('rectification
   res.json(evidences);
 });
 
-// 下载/查看整改截图
-router.get('/api/rectifications/:id/evidences/:eid/file', requirePermission('rectification:view'), (req, res) => {
+// 下载/查看整改截图 (支持 ?token=xxx 方式，用于 <img> 标签)
+router.get('/api/rectifications/:id/evidences/:eid/file', (req, res) => {
+  // 优先从 query 取 token，兼容 <img> 标签无法传 Authorization header
+  const token = req.query.token || (req.headers.authorization || '').replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: '未提供认证令牌' });
+  
   const db = getDb();
+  const session = db.prepare("SELECT * FROM sessions WHERE token=? AND expires_at > datetime('now')").get(token);
+  if (!session) return res.status(401).json({ error: '令牌无效或已过期' });
   const evidence = db.prepare('SELECT * FROM rectification_evidences WHERE id=? AND rectification_id=?').get(req.params.eid, req.params.id);
   if (!evidence) return res.status(404).json({ error: '截图不存在' });
 
@@ -442,6 +468,7 @@ router.get('/api/rectifications/:id/evidences/:eid/file', requirePermission('rec
 
   res.setHeader('Content-Type', evidence.mime_type || 'image/png');
   res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(evidence.original_name)}"`);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
   fs.createReadStream(filePath).pipe(res);
 });
 
@@ -554,7 +581,7 @@ router.post('/api/users', requirePermission('user:create'), (req, res) => {
   if (exists) return res.status(400).json({ error: '用户名已存在' });
 
   const result = db.prepare('INSERT INTO users (username, password, real_name, role, department, phone, email, login_type, ldap_dn) VALUES (?,?,?,?,?,?,?,?,?)')
-    .run(username, password, real_name, role, department, phone, email, login_type || "local", ldap_dn || null);
+    .run(username, bcrypt.hashSync(password, 10), real_name, role, department, phone, email, login_type || "local", ldap_dn || null);
   auditLog(db, req.user.id, req.user.username, req.user.real_name, 'create', 'user', 'user', String(result.lastInsertRowid), `创建用户: ${username} (${role})`);
   res.json({ id: result.lastInsertRowid, username, real_name, role });
 });
@@ -578,7 +605,7 @@ router.post('/api/users/:id/reset-password', requirePermission('user:reset_passw
   const user = db.prepare('SELECT username FROM users WHERE id=?').get(req.params.id);
   if (!user) return res.status(404).json({ error: '用户不存在' });
 
-  db.prepare('UPDATE users SET password=?, updated_at=CURRENT_TIMESTAMP WHERE id=?').run(new_password, req.params.id);
+  db.prepare('UPDATE users SET password=?, updated_at=CURRENT_TIMESTAMP WHERE id=?').run(bcrypt.hashSync(new_password, 10), req.params.id);
   auditLog(db, req.user.id, req.user.username, req.user.real_name, 'reset_password', 'user', 'user', req.params.id, `重置密码: ${user.username}`);
   res.json({ success: true });
 });
