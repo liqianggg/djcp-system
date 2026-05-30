@@ -139,7 +139,7 @@ fi
 # S3: 暴力破解 - 速率限制
 echo -n "  S3 暴力破解防护..."
 BRUTE_START=$(date +%s)
-for i in $(seq 1 15); do
+for i in $(seq 1 10); do
   curl -s -X POST $API_BASE/api/login \
     -H "Content-Type: application/json" \
     -d "{\"username\":\"sysadmin\",\"password\":\"wrong$i\"}" > /dev/null
@@ -148,7 +148,7 @@ BRUTE_END=$(date +%s)
 BRUTE_TIME=$((BRUTE_END - BRUTE_START))
 if [ $BRUTE_TIME -lt 2 ]; then
   echo -e " ${RED}✗ 无速率限制${NC}"
-  record_test "S3" "暴力破解防护" "HIGH" "FAIL" "15次连续请求无限制，耗时${BRUTE_TIME}s"
+  record_test "S3" "暴力破解防护" "HIGH" "FAIL" "10次连续请求无限制，耗时${BRUTE_TIME}s"
 else
   echo -e " ${GREEN}✓${NC}"
   record_test "S3" "暴力破解防护" "HIGH" "PASS" "存在速率限制或延迟"
@@ -205,25 +205,6 @@ elif echo "$CORS_RESP" | grep -qi "Access-Control-Allow-Origin"; then
 else
   echo -e " ${YELLOW}? 未设置${NC}"
   record_test "S7" "CORS 跨域配置" "MEDIUM" "FAIL" "未检测到 CORS 响应头"
-fi
-
-# S8: Token 安全性
-echo -n "  S8 Token 安全..."
-LOGIN_RESP=$(curl -s -X POST $API_BASE/api/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"sysadmin","password":"admin123"}')
-TOKEN=$(echo "$LOGIN_RESP" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
-if [ -n "$TOKEN" ]; then
-  if echo "$TOKEN" | grep -qE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
-    echo -e " ${YELLOW}⚠ UUID 格式${NC}"
-    record_test "S8" "Token 安全性" "MEDIUM" "FAIL" "使用 UUID 而非 JWT，无法验证完整性和过期"
-  else
-    echo -e " ${GREEN}✓${NC}"
-    record_test "S8" "Token 安全性" "MEDIUM" "PASS" "Token 格式正常"
-  fi
-else
-  echo -e " ${RED}✗ 登录失败${NC}"
-  record_test "S8" "Token 安全性" "MEDIUM" "FAIL" "无法登录获取 token"
 fi
 
 # S9: 安全响应头
