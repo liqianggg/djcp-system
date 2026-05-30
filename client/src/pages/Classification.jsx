@@ -35,15 +35,15 @@ export default function Classification() {
         <div className="card">
           <div className="table-wrapper">
             <table>
-              <thead><tr><th>信息系统</th><th>业务影响等级</th><th>服务范围</th><th>业务依赖</th><th>定级人</th><th>定级日期</th></tr></thead>
+              <thead><tr><th>信息系统</th><th>业务影响等级</th><th>服务范围</th><th>业务依赖</th><th>定级人</th><th>定级日期</th><th>操作</th></tr></thead>
               <tbody>
                 {classifications.length === 0 ? (
-                  <tr><td colSpan="6" className="empty-state"><h3>暂无定级记录</h3></td></tr>
+                  <tr><td colSpan="7" className="empty-state"><h3>暂无定级记录</h3></td></tr>
                 ) : classifications.map(c => (
                   <tr key={c.id}>
                     <td><strong>{c.system_name}</strong></td>
                     <td><span className={`level-badge level-${c.business_impact_level}`}>{c.business_impact_level}</span> <span style={{ marginLeft: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>{levelLabels[c.business_impact_level]}</span></td>
-                    <td>{c.service_scope || '-'}</td><td>{c.business_dependency || '-'}</td><td>{c.classified_by || '-'}</td><td>{c.classified_at || '-'}</td>
+                    <td>{c.service_scope || '-'}</td><td>{c.business_dependency || '-'}</td><td>{c.classified_by || '-'}</td><td>{c.classified_at || '-'}</td><td><a href={"/api/classifications/" + c.id + "/report?token=" + localStorage.getItem("djcp_token")} target="_blank" className="btn btn-sm" title="查看定级报告" style={{textDecoration:"none"}}><FileText size={14} /> 报告</a></td>
                   </tr>
                 ))}
               </tbody>
