@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================================
 #  DJCP 自动化测试监控脚本
-#  功能: 变更检测 → 系统启动 → 功能测试 → 安全测试 → 报告生成
+#  功能: 变更检测 → 系统启动 → 安全测试 → 全覆盖功能测试(REQ-001~012) → 报告生成
 # =============================================
 set -o pipefail
 
@@ -49,16 +49,16 @@ fi
 # ==================== 2. 启动系统 ====================
 echo -e "\n${YELLOW}[2/6] 启动系统服务...${NC}"
 
-pkill -f "node src/index.js" 2>/dev/null || true
-pkill -f "vite" 2>/dev/null || true
+kill $(lsof -t -i :3001) 2>/dev/null || true
+kill $(lsof -t -i :5173) 2>/dev/null || true
 sleep 1
 
 cd "$DIR/server"
-nohup node src/index.js > /tmp/djcp-server-test.log 2>&1 &
+bash -c 'node src/index.js > /tmp/djcp-server-test.log 2>&1 &'
 sleep 2
 
 cd "$DIR/client"
-nohup npx vite --host 0.0.0.0 > /tmp/djcp-vite-test.log 2>&1 &
+bash -c 'npx vite --host 0.0.0.0 > /tmp/djcp-vite-test.log 2>&1 &'
 sleep 3
 
 if curl -s -X POST $API_BASE/api/login -H "Content-Type: application/json" -d '{"username":"test","password":"test"}' > /dev/null 2>&1; then
@@ -252,98 +252,32 @@ else
   record_test "S9" "安全响应头" "LOW" "PASS" "安全响应头完整"
 fi
 
-# ==================== 4. 功能测试 ====================
-echo -e "\n${YELLOW}[4/6] 执行 API 功能测试...${NC}"
+# ==================== 4. 全覆盖功能测试 ====================
+echo -e "
+${YELLOW}[4/6] 执行全覆盖功能测试 (基于需求文档 REQ-001~REQ-012)...${NC}"
 
-cat >> "$REPORT_FILE" << FUNC_HEADER
+FUNC_REPORT="$REPORT_DIR/func-$TIMESTAMP.md"
+FUNC_OUTPUT=$(API_BASE="$API_BASE" REPORT_FILE="$FUNC_REPORT" bash "$DIR/scripts/func-test.sh" 2>&1)
+FUNC_EXIT=$?
+echo "$FUNC_OUTPUT" | while IFS= read -r line; do echo "  $line"; done
 
----
-
-## 功能测试结果
-
-| # | 测试项 | 结果 | 备注 |
-|---|--------|------|------|
-FUNC_HEADER
-
-FUNC_NUM=0
-func_test() {
-  FUNC_NUM=$((FUNC_NUM + 1))
-  local name=$1 result=$2 note=$3
-  local icon="✅"; [ "$result" != "PASS" ] && icon="❌"
-  echo "| F$FUNC_NUM | $name | $icon $result | $note |" >> "$REPORT_FILE"
-}
-
-# F1: 正常登录
-echo -n "  F1 正常登录..."
-if [ -n "$TOKEN" ]; then
-  echo -e " ${GREEN}✓${NC}"
-  func_test "正常登录" "PASS" "获取 token 成功"
+# 合并功能测试报告
+if [ -f "$FUNC_REPORT" ]; then
+  echo "" >> "$REPORT_FILE"
+  cat "$FUNC_REPORT" >> "$REPORT_FILE"
+  rm -f "$FUNC_REPORT"
+  echo -e "${GREEN}  ✓ 功能测试完成，结果已合并${NC}"
 else
-  echo -e " ${RED}✗${NC}"
-  func_test "正常登录" "FAIL" "登录失败"
-fi
-
-# F2: 错误密码
-echo -n "  F2 错误密码..."
-BAD_RESP=$(curl -s -X POST $API_BASE/api/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"sysadmin","password":"wrongpassword"}')
-if echo "$BAD_RESP" | grep -q '"success":false'; then
-  echo -e " ${GREEN}✓${NC}"
-  func_test "错误密码拒绝" "PASS" "正确拒绝错误密码"
-else
-  echo -e " ${RED}✗${NC}"
-  func_test "错误密码拒绝" "FAIL" "未能正确拒绝"
-fi
-
-# F3: 空用户名
-echo -n "  F3 空用户名..."
-EMPTY_RESP=$(curl -s -X POST $API_BASE/api/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"","password":"test"}')
-if echo "$EMPTY_RESP" | grep -q '"success":false'; then
-  echo -e " ${GREEN}✓${NC}"
-  func_test "空用户名校验" "PASS" "正确拒绝空用户名"
-else
-  echo -e " ${RED}✗${NC}"
-  func_test "空用户名校验" "FAIL" "未校验空用户名"
-fi
-
-# F4: 用户信息接口
-echo -n "  F4 用户信息..."
-if [ -n "$TOKEN" ]; then
-  ME_RESP=$(curl -s $API_BASE/api/me -H "Authorization: Bearer $TOKEN")
-  if echo "$ME_RESP" | grep -q '"username":"sysadmin"'; then
-    echo -e " ${GREEN}✓${NC}"
-    func_test "用户信息接口" "PASS" "返回用户数据正确"
-  else
-    echo -e " ${RED}✗${NC}"
-    func_test "用户信息接口" "FAIL" "返回数据异常"
-  fi
-else
-  echo -e " ${YELLOW}⊘ 跳过${NC}"
-  func_test "用户信息接口" "SKIP" "无 token"
-fi
-
-# F5: 登出
-echo -n "  F5 登出..."
-if [ -n "$TOKEN" ]; then
-  LOGOUT_RESP=$(curl -s -X POST $API_BASE/api/logout \
-    -H "Authorization: Bearer $TOKEN")
-  if echo "$LOGOUT_RESP" | grep -q '"success":true'; then
-    echo -e " ${GREEN}✓${NC}"
-    func_test "登出功能" "PASS" "登出成功"
-  else
-    echo -e " ${RED}✗${NC}"
-    func_test "登出功能" "FAIL" "登出失败"
-  fi
-else
-  echo -e " ${YELLOW}⊘ 跳过${NC}"
-  func_test "登出功能" "SKIP" "无 token"
+  echo -e "${RED}  ✗ 功能测试报告未生成${NC}"
 fi
 
 # ==================== 5. 生成摘要 ====================
 echo -e "\n${YELLOW}[5/6] 生成测试报告...${NC}"
+
+# 统计功能测试结果
+FUNC_PASS=$(grep -c '| REQ-.*|.*| ✅ PASS |' "$REPORT_FILE" 2>/dev/null || echo 0)
+FUNC_FAIL=$(grep -c '| REQ-.*|.*| ❌ FAIL |' "$REPORT_FILE" 2>/dev/null || echo 0)
+FUNC_TOTAL=$((FUNC_PASS + FUNC_FAIL))
 
 cat >> "$REPORT_FILE" << SUMMARY
 
@@ -354,9 +288,9 @@ cat >> "$REPORT_FILE" << SUMMARY
 | 类别 | 通过 | 失败 | 总计 |
 |------|------|------|------|
 | 安全测试 | $((9 - ISSUES_HIGH - ISSUES_MEDIUM - ISSUES_LOW)) | $((ISSUES_HIGH + ISSUES_MEDIUM + ISSUES_LOW)) | 9 |
-| 功能测试 | $PASS | $FAIL | $FUNC_NUM |
+| 功能测试 | $FUNC_PASS | $FUNC_FAIL | $FUNC_TOTAL |
 
-### 按严重程度分布
+### 安全按严重程度分布
 
 - 🔴 高危: $ISSUES_HIGH
 - 🟡 中危: $ISSUES_MEDIUM
@@ -397,8 +331,8 @@ echo -e "${GREEN}  ✓ 报告已生成: $REPORT_FILE${NC}"
 # ==================== 6. 清理 ====================
 echo -e "\n${YELLOW}[6/6] 清理服务...${NC}"
 
-pkill -f "node src/index.js" 2>/dev/null || true
-pkill -f "vite" 2>/dev/null || true
+kill $(lsof -t -i :3001) 2>/dev/null || true
+kill $(lsof -t -i :5173) 2>/dev/null || true
 
 echo "$CURRENT_COMMIT" > "$COMMIT_FILE"
 echo -e "${GREEN}  ✓ 清理完成${NC}"
@@ -409,13 +343,14 @@ echo -e "${BLUE}==============================================${NC}"
 echo -e "${BLUE}  测试完成摘要${NC}"
 echo -e "${BLUE}==============================================${NC}"
 echo -e "  📊 安全测试: $((9 - ISSUES_HIGH - ISSUES_MEDIUM - ISSUES_LOW))/9 通过"
+echo -e "  📊 功能测试: $FUNC_PASS/$FUNC_TOTAL 通过"
 echo -e "  🔴 高危问题: $ISSUES_HIGH"
 echo -e "  🟡 中危问题: $ISSUES_MEDIUM"
 echo -e "  🟢 低危问题: $ISSUES_LOW"
 echo -e "  📄 报告文件: $REPORT_FILE"
 echo -e "${BLUE}==============================================${NC}"
 
-if [ $ISSUES_HIGH -gt 0 ] || [ $ISSUES_MEDIUM -gt 0 ]; then
+if [ $ISSUES_HIGH -gt 0 ] || [ $ISSUES_MEDIUM -gt 0 ] || [ "$FUNC_FAIL" -gt 0 ]; then
   exit 1
 fi
 exit 0
