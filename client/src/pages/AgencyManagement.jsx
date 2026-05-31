@@ -157,7 +157,7 @@ export default function AgencyManagement() {
         </div>
 
         {filtered.length === 0 ? (
-          <EmptyState icon={<Building2 size={48} color="var(--text-tertiary)" />} title="暂无测评机构" description="点击"新增机构"添加第一个测评机构" />
+          <EmptyState icon={<Building2 size={48} color="var(--text-tertiary)" />} title="暂无测评机构" description={"点击「新增机构」添加第一个测评机构"} />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {filtered.map(a => (
