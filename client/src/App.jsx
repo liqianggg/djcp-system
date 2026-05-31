@@ -3,7 +3,8 @@ import { Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom'
 import { 
   LayoutDashboard, Server, ShieldCheck, FileText, 
   AlertTriangle, Wrench, ClipboardCheck, FolderOpen,
-  LogOut, User, Users, Shield, ScrollText
+  LogOut, User, Users, Shield, ScrollText, Settings,
+  ChevronRight
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -17,6 +18,7 @@ import Documents from './pages/Documents';
 import UserManagement from './pages/UserManagement';
 import PermissionManagement from './pages/PermissionManagement';
 import AuditLog from './pages/AuditLog';
+import SystemSettings from './pages/SystemSettings';
 
 const API = '';
 
@@ -26,6 +28,22 @@ const ROLE_LABELS = {
   security_auditor: '安全审计员',
   operator: '操作员',
   viewer: '只读用户'
+};
+
+// Apple-style icon color map
+const iconColors = {
+  dashboard:     { bg: 'rgba(0,122,255,0.12)',   color: '#007AFF' },
+  systems:       { bg: 'rgba(88,86,214,0.12)',    color: '#5856D6' },
+  classification:{ bg: 'rgba(52,199,89,0.12)',    color: '#34C759' },
+  filing:        { bg: 'rgba(90,200,250,0.12)',   color: '#5AC8FA' },
+  gapanalysis:   { bg: 'rgba(255,149,0,0.12)',    color: '#FF9500' },
+  rectification: { bg: 'rgba(255,59,48,0.1)',     color: '#FF3B30' },
+  assessment:    { bg: 'rgba(175,82,222,0.12)',   color: '#AF52DE' },
+  documents:     { bg: 'rgba(50,173,230,0.12)',   color: '#32ADE6' },
+  users:         { bg: 'rgba(60,60,67,0.1)',      color: '#48484A' },
+  permissions:   { bg: 'rgba(255,204,0,0.15)',    color: '#B38600' },
+  audit:         { bg: 'rgba(60,60,67,0.1)',      color: '#48484A' },
+  settings:      { bg: 'rgba(60,60,67,0.1)',      color: '#48484A' },
 };
 
 export default function App() {
@@ -82,46 +100,96 @@ export default function App() {
 
   const hasPerm = (code) => user.permissions?.includes(code);
 
-  const menuItems = [
-    { to: '/', icon: <LayoutDashboard size={18} />, label: '工作台', perm: 'dashboard:view' },
-    { to: '/systems', icon: <Server size={18} />, label: '信息系统', perm: 'system:view' },
-    { to: '/classification', icon: <ShieldCheck size={18} />, label: '系统定级', perm: 'classification:view' },
-    { to: '/filing', icon: <FileText size={18} />, label: '备案管理', perm: 'filing:view' },
-    { to: '/gap-analysis', icon: <AlertTriangle size={18} />, label: '差距分析', perm: 'gap:view' },
-    { to: '/rectification', icon: <Wrench size={18} />, label: '整改管理', perm: 'rectification:view' },
-    { to: '/assessment', icon: <ClipboardCheck size={18} />, label: '测评管理', perm: 'assessment:view' },
-    { to: '/documents', icon: <FolderOpen size={18} />, label: '文档管理', perm: 'document:view' },
-    { to: '/users', icon: <Users size={18} />, label: '用户管理', perm: 'user:view' },
-    { to: '/permissions', icon: <Shield size={18} />, label: '权限管理', perm: 'permission:view' },
-    { to: '/audit-log', icon: <ScrollText size={18} />, label: '审计日志', perm: 'audit:view' },
-  ].filter(item => hasPerm(item.perm));
+  // Apple-style nav items with icons
+  const navItem = (to, icon, label, colorKey, end) => (
+    <NavLink key={to} to={to} end={end}>
+      <span className="nav-icon" style={{ background: iconColors[colorKey]?.bg, color: iconColors[colorKey]?.color }}>
+        {icon}
+      </span>
+      <span className="text">{label}</span>
+    </NavLink>
+  );
+
+  // Grouped navigation: 业务功能
+  const businessItems = [
+    { to: '/', icon: <LayoutDashboard size={15} />, label: '工作台', color: 'dashboard', end: true },
+    { to: '/systems', icon: <Server size={15} />, label: '信息系统', color: 'systems' },
+    { to: '/classification', icon: <ShieldCheck size={15} />, label: '系统定级', color: 'classification' },
+  ].filter(i => hasPerm({dashboard:'dashboard:view',systems:'system:view',classification:'classification:view'}[i.color] || i.to === '/' || true));
+
+  const processItems = [
+    { to: '/filing', icon: <FileText size={15} />, label: '备案管理', color: 'filing' },
+    { to: '/gap-analysis', icon: <AlertTriangle size={15} />, label: '差距分析', color: 'gapanalysis' },
+    { to: '/rectification', icon: <Wrench size={15} />, label: '整改管理', color: 'rectification' },
+    { to: '/assessment', icon: <ClipboardCheck size={15} />, label: '测评管理', color: 'assessment' },
+  ].filter(i => hasPerm({filing:'filing:view','gapanalysis':'gap:view',rectification:'rectification:view',assessment:'assessment:view'}[i.color] || true));
+
+  const resourceItems = [
+    { to: '/documents', icon: <FolderOpen size={15} />, label: '文档管理', color: 'documents' },
+  ].filter(i => hasPerm({documents:'document:view'}[i.color] || true));
+
+  const adminItems = [
+    { to: '/users', icon: <Users size={15} />, label: '用户管理', color: 'users' },
+    { to: '/permissions', icon: <Shield size={15} />, label: '权限管理', color: 'permissions' },
+    { to: '/audit-log', icon: <ScrollText size={15} />, label: '审计日志', color: 'audit' },
+    { to: '/settings', icon: <Settings size={15} />, label: '系统管理', color: 'settings' },
+  ].filter(i => hasPerm({users:'user:view',permissions:'permission:view',audit:'audit:view',settings:'settings:view'}[i.color] || true));
+
+  const permMap = {
+    '/': 'dashboard:view', '/systems': 'system:view', '/classification': 'classification:view',
+    '/filing': 'filing:view', '/gap-analysis': 'gap:view', '/rectification': 'rectification:view',
+    '/assessment': 'assessment:view', '/documents': 'document:view',
+    '/users': 'user:view', '/permissions': 'permission:view', '/audit-log': 'audit:view',
+    '/settings': 'settings:view'
+  };
 
   return (
     <div className="app-layout">
       <aside className="sidebar">
         <div className="sidebar-header">
+          <div className="app-icon">🛡️</div>
           <h1>等保测评管理系统</h1>
-          <div className="subtitle">三权分立 · 全生命周期</div>
         </div>
         <nav className="sidebar-nav">
-          {menuItems.map(item => (
-            <NavLink key={item.to} to={item.to} end={item.to === '/'}>
-              {item.icon}
-              <span className="text">{item.label}</span>
-            </NavLink>
-          ))}
+          {businessItems.length > 0 && (
+            <div className="sidebar-section">
+              <div className="sidebar-section-label">业务功能</div>
+              {businessItems.map(i => navItem(i.to, i.icon, i.label, i.color, i.end))}
+            </div>
+          )}
+          {processItems.length > 0 && (
+            <div className="sidebar-section">
+              <div className="sidebar-section-label">测评流程</div>
+              {processItems.map(i => navItem(i.to, i.icon, i.label, i.color, false))}
+            </div>
+          )}
+          {resourceItems.length > 0 && (
+            <div className="sidebar-section">
+              <div className="sidebar-section-label">资源管理</div>
+              {resourceItems.map(i => navItem(i.to, i.icon, i.label, i.color, false))}
+            </div>
+          )}
+          {adminItems.length > 0 && (
+            <div className="sidebar-section">
+              <div className="sidebar-section-label">系统管理</div>
+              {adminItems.map(i => navItem(i.to, i.icon, i.label, i.color, false))}
+            </div>
+          )}
         </nav>
-        <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <User size={14} style={{ color: 'rgba(255,255,255,0.7)' }} />
-            <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.9)' }}>{user.real_name || user.username}</span>
+        <div className="sidebar-footer">
+          <div className="avatar">
+            {(user.real_name || user.username).charAt(0).toUpperCase()}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>{ROLE_LABELS[user.role] || user.role}</span>
-            <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '2px' }}>
-              <LogOut size={14} />
-            </button>
+          <div className="user-info">
+            <div className="user-name">{user.real_name || user.username}</div>
+            <div className="user-role">{ROLE_LABELS[user.role] || user.role}</div>
           </div>
+          <button onClick={handleLogout} style={{
+            background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)',
+            padding: '4px', borderRadius: '6px', display: 'flex'
+          }}>
+            <LogOut size={14} />
+          </button>
         </div>
       </aside>
 
@@ -138,6 +206,7 @@ export default function App() {
           <Route path="/users" element={hasPerm('user:view') ? <UserManagement token={token} /> : <Navigate to="/" replace />} />
           <Route path="/permissions" element={hasPerm('permission:view') ? <PermissionManagement token={token} /> : <Navigate to="/" replace />} />
           <Route path="/audit-log" element={hasPerm('audit:view') ? <AuditLog token={token} /> : <Navigate to="/" replace />} />
+          <Route path="/settings" element={hasPerm('settings:view') ? <SystemSettings token={token} /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
@@ -160,34 +229,131 @@ function LoginPage({ onLogin }) {
   };
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <h1>🔐 等保测评管理系统</h1>
-        <p className="login-subtitle">三权分立 · 全生命周期管理平台</p>
+    <div style={{
+      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: '#F5F5F7',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif'
+    }}>
+      <div style={{
+        background: '#FFFFFF',
+        borderRadius: '20px',
+        padding: '48px 44px',
+        width: '400px',
+        maxWidth: '92vw',
+        boxShadow: '0 20px 48px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)'
+      }}>
+        {/* App Icon */}
+        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+          <div style={{
+            width: '56px', height: '56px', borderRadius: '14px',
+            background: 'linear-gradient(135deg, #007AFF, #5856D6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 16px', fontSize: '24px',
+            boxShadow: '0 4px 16px rgba(0,122,255,0.25)'
+          }}>🛡️</div>
+          <h1 style={{
+            fontSize: '22px', fontWeight: 620, color: '#1D1D1F',
+            letterSpacing: '-0.022em', marginBottom: '2px'
+          }}>等保测评管理系统</h1>
+          <p style={{ color: '#86868B', fontSize: '14px', fontWeight: 400 }}>
+            三权分立 · 全生命周期管理
+          </p>
+        </div>
+
+        {/* Form */}
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>用户名</label>
-            <input className="form-control" value={username} onChange={e => setUsername(e.target.value)} placeholder="请输入用户名" autoFocus />
+          <div style={{ marginBottom: '18px' }}>
+            <label style={{
+              display: 'block', fontSize: '13px', fontWeight: 500, color: '#1D1D1F',
+              marginBottom: '6px', letterSpacing: '-0.01em'
+            }}>用户名</label>
+            <input
+              style={{
+                width: '100%', padding: '11px 16px',
+                border: '1px solid rgba(60,60,67,0.16)',
+                borderRadius: '10px', fontSize: '15px',
+                fontFamily: 'inherit', outline: 'none',
+                transition: 'all 0.2s ease',
+                background: '#F5F5F7',
+                color: '#1D1D1F'
+              }}
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="请输入用户名"
+              autoFocus
+              onFocus={e => { e.target.style.borderColor = '#007AFF'; e.target.style.boxShadow = '0 0 0 3px rgba(0,122,255,0.12)'; e.target.style.background = '#FFFFFF'; }}
+              onBlur={e => { e.target.style.borderColor = 'rgba(60,60,67,0.16)'; e.target.style.boxShadow = 'none'; e.target.style.background = '#F5F5F7'; }}
+            />
           </div>
-          <div className="form-group">
-            <label>密码</label>
-            <input className="form-control" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="请输入密码" />
+          <div style={{ marginBottom: error ? '12px' : '22px' }}>
+            <label style={{
+              display: 'block', fontSize: '13px', fontWeight: 500, color: '#1D1D1F',
+              marginBottom: '6px', letterSpacing: '-0.01em'
+            }}>密码</label>
+            <input
+              type="password"
+              style={{
+                width: '100%', padding: '11px 16px',
+                border: '1px solid rgba(60,60,67,0.16)',
+                borderRadius: '10px', fontSize: '15px',
+                fontFamily: 'inherit', outline: 'none',
+                transition: 'all 0.2s ease',
+                background: '#F5F5F7',
+                color: '#1D1D1F'
+              }}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="请输入密码"
+              onFocus={e => { e.target.style.borderColor = '#007AFF'; e.target.style.boxShadow = '0 0 0 3px rgba(0,122,255,0.12)'; e.target.style.background = '#FFFFFF'; }}
+              onBlur={e => { e.target.style.borderColor = 'rgba(60,60,67,0.16)'; e.target.style.boxShadow = 'none'; e.target.style.background = '#F5F5F7'; }}
+            />
           </div>
-          {error && <p style={{ color: 'var(--danger)', fontSize: '14px', marginBottom: '16px' }}>{error}</p>}
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '12px' }} disabled={loading}>
+
+          {error && (
+            <p style={{ color: '#FF3B30', fontSize: '13px', marginBottom: '16px', textAlign: 'center' }}>
+              {error}
+            </p>
+          )}
+
+          <button type="submit" disabled={loading} style={{
+            width: '100%', padding: '12px',
+            background: loading ? '#A0C4FF' : '#007AFF',
+            color: '#fff', border: 'none', borderRadius: '12px',
+            fontSize: '16px', fontWeight: 590,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            letterSpacing: '-0.01em',
+            boxShadow: '0 2px 8px rgba(0,122,255,0.25)',
+            transition: 'all 0.2s ease',
+            fontFamily: 'inherit'
+          }}>
             {loading ? '登录中...' : '登 录'}
           </button>
         </form>
-        <div style={{ marginTop: '20px', padding: '12px', background: '#f0fdf4', borderRadius: '8px', fontSize: '12px' }}>
-          <p style={{ fontWeight: 600, marginBottom: '6px', color: '#166534' }}>默认账号（三权分立）:</p>
-          <table style={{ width: '100%', fontSize: '12px' }}>
-            <thead><tr><th style={{textAlign:'left'}}>账号</th><th style={{textAlign:'left'}}>角色</th><th style={{textAlign:'left'}}>密码</th></tr></thead>
+
+        {/* Account Info */}
+        <div style={{
+          marginTop: '24px', padding: '16px',
+          background: '#F5F5F7', borderRadius: '12px',
+          border: '1px solid rgba(60,60,67,0.08)'
+        }}>
+          <p style={{
+            fontSize: '12px', fontWeight: 590, color: '#86868B',
+            marginBottom: '10px', letterSpacing: '0.02em'
+          }}>默认账号（三权分立）</p>
+          <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: '4px 0', fontSize: '11px', fontWeight: 590, color: '#AEAEB2' }}>账号</th>
+                <th style={{ textAlign: 'left', padding: '4px 0', fontSize: '11px', fontWeight: 590, color: '#AEAEB2' }}>角色</th>
+                <th style={{ textAlign: 'left', padding: '4px 0', fontSize: '11px', fontWeight: 590, color: '#AEAEB2' }}>密码</th>
+              </tr>
+            </thead>
             <tbody>
-              <tr><td>sysadmin</td><td>系统管理员</td><td>admin123</td></tr>
-              <tr><td>secadmin</td><td>安全管理员</td><td>admin123</td></tr>
-              <tr><td>auditor</td><td>安全审计员</td><td>admin123</td></tr>
-              <tr><td>operator</td><td>操作员</td><td>admin123</td></tr>
-              <tr><td>viewer</td><td>只读用户</td><td>admin123</td></tr>
+              <tr><td style={{ padding: '3px 0', color: '#1D1D1F' }}>sysadmin</td><td style={{ color: '#1D1D1F' }}>系统管理员</td><td style={{ color: '#86868B' }}>admin123</td></tr>
+              <tr><td style={{ padding: '3px 0', color: '#1D1D1F' }}>secadmin</td><td style={{ color: '#1D1D1F' }}>安全管理员</td><td style={{ color: '#86868B' }}>admin123</td></tr>
+              <tr><td style={{ padding: '3px 0', color: '#1D1D1F' }}>auditor</td><td style={{ color: '#1D1D1F' }}>安全审计员</td><td style={{ color: '#86868B' }}>admin123</td></tr>
+              <tr><td style={{ padding: '3px 0', color: '#1D1D1F' }}>operator</td><td style={{ color: '#1D1D1F' }}>操作员</td><td style={{ color: '#86868B' }}>admin123</td></tr>
+              <tr><td style={{ padding: '3px 0', color: '#1D1D1F' }}>viewer</td><td style={{ color: '#1D1D1F' }}>只读用户</td><td style={{ color: '#86868B' }}>admin123</td></tr>
             </tbody>
           </table>
         </div>
