@@ -103,6 +103,7 @@ const ASSESSMENT_TEMPLATE = [
 export default function Assessment() {
   const [systems, setSystems] = useState([]);
   const [assessments, setAssessments] = useState([]);
+  const [agencies, setAgencies] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [viewAssessment, setViewAssessment] = useState(null);
   const [form, setForm] = useState({
@@ -118,6 +119,7 @@ export default function Assessment() {
 
   useEffect(() => {
     apiGet('/api/systems').then(setSystems);
+    apiGet('/api/agencies').then(setAgencies);
     loadAssessments();
   }, []);
 
@@ -230,7 +232,10 @@ export default function Assessment() {
                   </div>
                   <div className="form-group">
                     <label>测评机构</label>
-                    <input className="form-control" value={form.assessment_agency} onChange={e => setForm({...form, assessment_agency: e.target.value})} placeholder="如: XX测评中心" />
+                    <select className="form-control" value={form.assessment_agency} onChange={e => setForm({...form, assessment_agency: e.target.value})}>
+                      <option value="">请选择测评机构</option>
+                      {agencies.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+                    </select>
                   </div>
                 </div>
                 <div className="form-row-3">

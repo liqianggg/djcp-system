@@ -48,6 +48,8 @@ const DEFAULT_REQUIREMENTS = [
 ];
 
 const RISK_COLORS = { high: 'badge-red', medium: 'badge-yellow', low: 'badge-green' };
+const RISK_LABELS = { high: '高', medium: '中', low: '低' };
+const STATUS_LABELS = { draft: '草稿', in_progress: '进行中', completed: '已完成' };
 
 export default function GapAnalysis() {
   const [systems, setSystems] = useState([]);
@@ -194,7 +196,7 @@ export default function GapAnalysis() {
                       </div>
                       <span style={{ fontSize: '12px', marginLeft: '8px' }}>{a.compliance_rate}%</span>
                     </td>
-                    <td><span className={`badge ${a.status === 'completed' ? 'badge-green' : 'badge-yellow'}`}>{a.status}</span></td>
+                    <td><span className={`badge ${a.status === 'completed' ? 'badge-green' : a.status === 'in_progress' ? 'badge-blue' : 'badge-gray'}`}>{STATUS_LABELS[a.status] || a.status}</span></td>
                     <td><button className="btn btn-sm" onClick={() => handleView(a.id)}><Eye size={14} /> 查看</button></td>
                   </tr>
                 ))}
@@ -335,7 +337,7 @@ function AnalysisDetail({ analysis, onBack }) {
                       <td style={{ fontSize: '12px' }}>{i.expected_value}</td>
                       <td style={{ fontSize: '12px' }}>{i.actual_value || '-'}</td>
                       <td>{i.is_compliant ? <span className="badge badge-green">是</span> : <span className="badge badge-red">否</span>}</td>
-                      <td><span className={`badge ${RISK_COLORS[i.risk_level]}`}>{i.risk_level}</span></td>
+                      <td><span className={`badge ${RISK_COLORS[i.risk_level]}`}>{RISK_LABELS[i.risk_level] || i.risk_level}</span></td>
                     </tr>
                   ))}
                 </tbody>

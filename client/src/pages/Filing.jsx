@@ -16,7 +16,7 @@ export default function Filing() {
   const [filterYear, setFilterYear] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [years, setYears] = useState([]);
-  const [form, setForm] = useState({ system_id:'', filing_number:'', filing_authority:'', filing_date:'', approval_date:'', filing_status:'preparing', filing_year:new Date().getFullYear(), notes:'' });
+  const [form, setForm] = useState({ system_id:'', filing_number:'', filing_authority:'', filing_date:'', approval_date:'', filing_status:'preparing', filing_year:new Date().getFullYear(), remarks:'' });
 
   const loadFilings = () => {
     const p = new URLSearchParams();
@@ -30,8 +30,8 @@ export default function Filing() {
   }, []);
   useEffect(() => { loadFilings(); }, [filterYear, filterStatus]);
 
-  const openCreate = () => { setEditing(null); setForm({ system_id:'', filing_number:'', filing_authority:'', filing_date:'', approval_date:'', filing_status:'preparing', filing_year:new Date().getFullYear(), notes:'' }); setEvidences([]); setShowModal(true); };
-  const openEdit = (f) => { setEditing(f); setForm({ system_id:f.system_id, filing_number:f.filing_number, filing_authority:f.filing_authority, filing_date:f.filing_date, approval_date:f.approval_date, filing_status:f.filing_status, filing_year:f.filing_year, notes:f.notes||'' }); apiGet('/api/filings/'+f.id+'/evidences').then(setEvidences); setShowModal(true); };
+  const openCreate = () => { setEditing(null); setForm({ system_id:'', filing_number:'', filing_authority:'', filing_date:'', approval_date:'', filing_status:'preparing', filing_year:new Date().getFullYear(), remarks:'' }); setEvidences([]); setShowModal(true); };
+  const openEdit = (f) => { setEditing(f); setForm({ system_id:f.system_id, filing_number:f.filing_number, filing_authority:f.filing_authority, filing_date:f.filing_date, approval_date:f.approval_date, filing_status:f.filing_status, filing_year:f.filing_year, remarks:f.remarks||'' }); apiGet('/api/filings/'+f.id+'/evidences').then(setEvidences); setShowModal(true); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -111,7 +111,7 @@ export default function Filing() {
             <div className="form-group"><label>备案年份</label><input className="form-control" type="number" value={form.filing_year} onChange={e=>setForm({...form,filing_year:parseInt(e.target.value)||new Date().getFullYear()})} /></div>
             <div className="form-group"><label>状态</label><select className="form-control" value={form.filing_status} onChange={e=>setForm({...form,filing_status:e.target.value})}>{Object.entries(STATUS_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></div>
           </div>
-          <div className="form-group"><label>备注</label><textarea className="form-control" rows={2} value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} /></div>
+          <div className="form-group"><label>备注</label><textarea className="form-control" rows={2} value={form.remarks} onChange={e=>setForm({...form,remarks:e.target.value})} /></div>
 
           {editing && (
             <div className="form-group">

@@ -1114,8 +1114,10 @@ router.get('/api/assessments', requirePermission('assessment:view'), (req, res) 
 router.post('/api/assessments', requirePermission('assessment:create'), (req, res) => {
   const db = getDb();
   const { system_id, assessment_agency, assessment_type, assessment_date, overall_score, overall_level, conclusion, report_number, assessment_report, status, items } = req.body;
-  const result = db.prepare('INSERT INTO assessments (system_id, assessment_agency, assessment_type, assessment_date, overall_score, overall_level, conclusion, report_number, assessment_report, status) VALUES (?,?,?,?,?,?,?,?,?,?)')
-    .run(system_id, assessment_agency, assessment_type, assessment_date, overall_score, overall_level, conclusion, report_number, assessment_report, status || 'planned');
+  // 根据机构名称查找 agency_id
+  const agency_id = assessment_agency ? (db.prepare('SELECT id FROM assessment_agencies WHERE name=?').get(assessment_agency)?.id || null) : null;
+  const result = db.prepare('INSERT INTO assessments (system_id, assessment_agency, agency_id, assessment_type, assessment_date, overall_score, overall_level, conclusion, report_number, assessment_report, status) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+    .run(system_id, assessment_agency, agency_id, assessment_type, assessment_date, overall_score, overall_level, conclusion, report_number, assessment_report, status || 'planned');
   const assessmentId = result.lastInsertRowid;
   if (items && items.length > 0) {
     const stmt = db.prepare('INSERT INTO assessment_items (assessment_id, category, control_id, control_desc, score, max_score, result, remarks) VALUES (?,?,?,?,?,?,?,?)');
