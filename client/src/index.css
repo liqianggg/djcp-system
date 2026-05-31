@@ -873,3 +873,8 @@ select.form-control { cursor: pointer; }
   0%   { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.95); }
   100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
 }
+
+@keyframes popoverDown {
+  0%   { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}

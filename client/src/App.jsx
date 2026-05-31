@@ -177,7 +177,6 @@ export default function App() {
             </div>
           )}
         </nav>
-        {token && <div style={{ padding: '0 16px', marginBottom: '8px' }}><RectificationMascot token={token} /></div>}
         <div className="sidebar-footer">
           <div className="avatar">
             {(user.real_name || user.username).charAt(0).toUpperCase()}
@@ -194,6 +193,8 @@ export default function App() {
           </button>
         </div>
       </aside>
+
+      {token && <RectificationMascot token={token} />}
 
       <main className="main-content">
         <Routes>
