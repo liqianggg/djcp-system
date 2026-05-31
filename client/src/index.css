@@ -43,6 +43,10 @@
   --sidebar-width: 260px;
   --sidebar-bg: rgba(242,242,247,0.78);
   --sidebar-active: rgba(0,122,255,0.12);
+  /* Cards & Interactive */
+  --card-bg: rgba(255,255,255,0.72);
+  --border-color: rgba(60,60,67,0.1);
+  --hover-bg: rgba(0,0,0,0.04);
   --sidebar-active-text: var(--blue);
 
   /* Shadows - Apple-style layered */
@@ -842,4 +846,30 @@ select.form-control { cursor: pointer; }
   .sidebar, .page-header, .btn, .modal-overlay { display: none !important; }
   .main-content { margin-left: 0 !important; }
   .card { box-shadow: none; border: 1px solid var(--separator); }
+}
+
+/* ============================================================
+   Mascot Animations
+   ============================================================ */
+@keyframes mascotBounce {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.15); }
+  50%  { transform: scale(0.95); }
+  70%  { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes mascotFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+
+@keyframes badgePulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.1); }
+}
+
+@keyframes popoverIn {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.95); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
 }

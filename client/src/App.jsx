@@ -19,6 +19,7 @@ import UserManagement from './pages/UserManagement';
 import PermissionManagement from './pages/PermissionManagement';
 import AuditLog from './pages/AuditLog';
 import SystemSettings from './pages/SystemSettings';
+import RectificationMascot from './pages/RectificationMascot';
 
 const API = '';
 
@@ -176,6 +177,7 @@ export default function App() {
             </div>
           )}
         </nav>
+        {token && <div style={{ padding: '0 16px', marginBottom: '8px' }}><RectificationMascot token={token} /></div>}
         <div className="sidebar-footer">
           <div className="avatar">
             {(user.real_name || user.username).charAt(0).toUpperCase()}
