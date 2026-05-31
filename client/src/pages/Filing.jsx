@@ -18,13 +18,17 @@ export default function Filing() {
   const [years, setYears] = useState([]);
   const [form, setForm] = useState({ system_id:'', filing_number:'', filing_authority:'', filing_date:'', approval_date:'', filing_status:'preparing', filing_year:new Date().getFullYear(), notes:'' });
 
-  const load = () => {
+  const loadFilings = () => {
     const p = new URLSearchParams();
     if (filterYear) p.set('year', filterYear);
     if (filterStatus) p.set('status', filterStatus);
-    apiGet('/api/filings?'+p).then(data => { if(data) { setFilings(data.filings||data); setYears(data.years||[]); } });
+    apiGet('/api/filings?'+p).then(data => { if(data) setFilings(Array.isArray(data)?data:(data.filings||[])); });
   };
-  useEffect(() => { apiGet('/api/systems').then(setSystems); load(); }, [filterYear, filterStatus]);
+  useEffect(() => {
+    apiGet('/api/systems').then(setSystems);
+    apiGet('/api/filings/years').then(y => y && setYears(y));
+  }, []);
+  useEffect(() => { loadFilings(); }, [filterYear, filterStatus]);
 
   const openCreate = () => { setEditing(null); setForm({ system_id:'', filing_number:'', filing_authority:'', filing_date:'', approval_date:'', filing_status:'preparing', filing_year:new Date().getFullYear(), notes:'' }); setEvidences([]); setShowModal(true); };
   const openEdit = (f) => { setEditing(f); setForm({ system_id:f.system_id, filing_number:f.filing_number, filing_authority:f.filing_authority, filing_date:f.filing_date, approval_date:f.approval_date, filing_status:f.filing_status, filing_year:f.filing_year, notes:f.notes||'' }); apiGet('/api/filings/'+f.id+'/evidences').then(setEvidences); setShowModal(true); };
@@ -32,10 +36,10 @@ export default function Filing() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     editing ? await apiPut('/api/filings/'+editing.id, form) : await apiPost('/api/filings', form);
-    setShowModal(false); setEditing(null); load();
+    setShowModal(false); setEditing(null); loadFilings();
   };
 
-  const handleDelete = async (id) => { if(!confirm('确定删除？'))return; await apiDelete('/api/filings/'+id); load(); };
+  const handleDelete = async (id) => { if(!confirm('确定删除？'))return; await apiDelete('/api/filings/'+id); loadFilings(); };
 
   const handleUpload = async (filingId) => {
     const input = document.createElement('input'); input.type='file'; input.accept='image/*'; input.multiple=true;

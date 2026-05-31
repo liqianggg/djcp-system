@@ -228,132 +228,58 @@ function LoginPage({ onLogin }) {
     setLoading(false);
   };
 
+  const is = {width:'100%',padding:'11px 16px',border:'1px solid rgba(0,200,255,0.2)',borderRadius:8,fontSize:14,fontFamily:'inherit',outline:'none',background:'rgba(10,10,30,0.5)',color:'#e0e8ff'};
+  const fs = {borderColor:'rgba(0,200,255,0.6)',boxShadow:'0 0 20px rgba(0,150,255,0.2), inset 0 0 8px rgba(0,150,255,0.08)',background:'rgba(10,15,35,0.7)'};
+
   return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: '#F5F5F7',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif'
-    }}>
-      <div style={{
-        background: '#FFFFFF',
-        borderRadius: '20px',
-        padding: '48px 44px',
-        width: '400px',
-        maxWidth: '92vw',
-        boxShadow: '0 20px 48px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)'
-      }}>
-        {/* App Icon */}
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <div style={{
-            width: '56px', height: '56px', borderRadius: '14px',
-            background: 'linear-gradient(135deg, #007AFF, #5856D6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 16px', fontSize: '24px',
-            boxShadow: '0 4px 16px rgba(0,122,255,0.25)'
-          }}>🛡️</div>
-          <h1 style={{
-            fontSize: '22px', fontWeight: 620, color: '#1D1D1F',
-            letterSpacing: '-0.022em', marginBottom: '2px'
-          }}>等保测评管理系统</h1>
-          <p style={{ color: '#86868B', fontSize: '14px', fontWeight: 400 }}>
-            三权分立 · 全生命周期管理
-          </p>
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'flex-end',background:'#0a0a1a',position:'relative',overflow:'hidden'}}>
+      <div style={{position:'absolute',inset:0,backgroundImage:'linear-gradient(rgba(0,200,255,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,255,0.04) 1px,transparent 1px)',backgroundSize:'60px 60px',animation:'gridMove 20s linear infinite',pointerEvents:'none'}}/>
+      <div style={{position:'absolute',top:'-40%',left:'-20%',width:'100%',height:'180%',background:'radial-gradient(ellipse at 30% 50%,rgba(0,120,255,0.1) 0%,transparent 60%)',animation:'glowPulse 6s ease-in-out infinite',pointerEvents:'none'}}/>
+      <div style={{position:'absolute',top:'20%',right:'10%',width:500,height:500,background:'radial-gradient(circle,rgba(0,200,255,0.06) 0%,transparent 50%)',pointerEvents:'none'}}/>
+      <div style={{position:'absolute',inset:0,pointerEvents:'none',opacity:0.12}}>
+        <div style={{position:'absolute',top:'18%',left:0,width:'35%',height:1,background:'linear-gradient(90deg,transparent,#0cf,transparent)'}}/>
+        <div style={{position:'absolute',top:'55%',left:'55%',width:'45%',height:1,background:'linear-gradient(90deg,transparent,#06f,transparent)'}}/>
+        <div style={{position:'absolute',top:'75%',left:'30%',width:'30%',height:1,background:'linear-gradient(90deg,transparent,#0cf,transparent)'}}/>
+        <div style={{position:'absolute',left:'35%',top:'10%',width:1,height:'25%',background:'linear-gradient(0deg,transparent,#06f,transparent)'}}/>
+        <div style={{position:'absolute',left:'75%',top:'50%',width:1,height:'30%',background:'linear-gradient(0deg,transparent,#0cf,transparent)'}}/>
+      </div>
+      <div style={{position:'absolute',inset:0,pointerEvents:'none'}}>
+        {[...Array(15)].map((_,i)=>(<div key={i} style={{position:'absolute',width:(Math.random()*3+1)+'px',height:(Math.random()*3+1)+'px',background:i%3===0?'#0cf':'#06f',borderRadius:'50%',left:(Math.random()*80+10)+'%',top:(Math.random()*100)+'%',boxShadow:'0 0 6px '+(i%3===0?'#0cf':'#06f'),animation:'particleFloat '+(Math.random()*4+5)+'s linear infinite',animationDelay:(Math.random()*5)+'s',opacity:0}}/>))}
+      </div>
+      <div style={{position:'absolute',left:'8%',top:'25%',pointerEvents:'none',opacity:0.035,transform:'rotate(-15deg)',fontFamily:'monospace',fontSize:52,fontWeight:700,color:'#0cf',lineHeight:1,userSelect:'none'}}>
+        <div>01001110</div><div style={{opacity:.5}}>01010100</div><div style={{opacity:.3}}>01001111</div><div style={{opacity:.5}}>01001011</div><div style={{opacity:.15}}>01010011</div><div style={{opacity:.3}}>01000011</div>
+      </div>
+      <div style={{position:'absolute',left:'8%',top:'50%',transform:'translateY(-50%)',pointerEvents:'none',maxWidth:500,userSelect:'none'}}>
+        <div style={{fontSize:48,fontWeight:280,color:'#0cf',letterSpacing:'.05em',lineHeight:1.1,marginBottom:12,textShadow:'0 0 40px rgba(0,200,255,.3)'}}>网络安全<br/>等级保护</div>
+        <div style={{fontSize:16,fontWeight:300,color:'rgba(0,200,255,.5)',letterSpacing:'.08em'}}>GRADED PROTECTION SYSTEM</div>
+        <div style={{marginTop:32,fontSize:14,color:'rgba(0,180,255,.3)',letterSpacing:'.04em',lineHeight:1.6}}>三权分立 · 全生命周期管理</div>
+      </div>
+      <div style={{position:'relative',zIndex:10,background:'rgba(10,15,35,.75)',backdropFilter:'blur(40px) saturate(200%)',WebkitBackdropFilter:'blur(40px) saturate(200%)',borderRadius:16,border:'1px solid rgba(0,200,255,.15)',padding:'44px 48px',width:400,maxWidth:'90vw',marginRight:'8%',boxShadow:'0 0 60px rgba(0,120,255,.1)'}}>
+        <div style={{position:'absolute',top:-1,left:-1,width:30,height:30,borderTop:'2px solid rgba(0,200,255,.3)',borderLeft:'2px solid rgba(0,200,255,.3)',borderRadius:'16px 0 0 0'}}/>
+        <div style={{position:'absolute',bottom:-1,right:-1,width:30,height:30,borderBottom:'2px solid rgba(0,200,255,.3)',borderRight:'2px solid rgba(0,200,255,.3)',borderRadius:'0 0 16px 0'}}/>
+        <div style={{textAlign:'center',marginBottom:32}}>
+          <div style={{width:60,height:60,borderRadius:14,background:'linear-gradient(135deg,#06f,#0cf)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:28,boxShadow:'0 0 30px rgba(0,150,255,.4)'}}>🛡️</div>
+          <h1 style={{fontSize:20,fontWeight:620,color:'#e0e8ff',letterSpacing:'.02em',marginBottom:4}}>等保测评管理系统</h1>
+          <p style={{color:'rgba(0,200,255,.5)',fontSize:13,letterSpacing:'.04em'}}>登录以继续</p>
         </div>
-
-        {/* Form */}
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '18px' }}>
-            <label style={{
-              display: 'block', fontSize: '13px', fontWeight: 500, color: '#1D1D1F',
-              marginBottom: '6px', letterSpacing: '-0.01em'
-            }}>用户名</label>
-            <input
-              style={{
-                width: '100%', padding: '11px 16px',
-                border: '1px solid rgba(60,60,67,0.16)',
-                borderRadius: '10px', fontSize: '15px',
-                fontFamily: 'inherit', outline: 'none',
-                transition: 'all 0.2s ease',
-                background: '#F5F5F7',
-                color: '#1D1D1F'
-              }}
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-              placeholder="请输入用户名"
-              autoFocus
-              onFocus={e => { e.target.style.borderColor = '#007AFF'; e.target.style.boxShadow = '0 0 0 3px rgba(0,122,255,0.12)'; e.target.style.background = '#FFFFFF'; }}
-              onBlur={e => { e.target.style.borderColor = 'rgba(60,60,67,0.16)'; e.target.style.boxShadow = 'none'; e.target.style.background = '#F5F5F7'; }}
-            />
+          <div style={{marginBottom:18}}>
+            <label style={{display:'block',fontSize:12,fontWeight:500,color:'rgba(0,200,255,.6)',marginBottom:6,letterSpacing:'.05em',textTransform:'uppercase'}}>Username</label>
+            <input style={is} value={username} onChange={e=>setUsername(e.target.value)} placeholder="请输入用户名" autoFocus onFocus={e=>Object.assign(e.target.style,fs)} onBlur={e=>Object.assign(e.target.style,is)}/>
           </div>
-          <div style={{ marginBottom: error ? '12px' : '22px' }}>
-            <label style={{
-              display: 'block', fontSize: '13px', fontWeight: 500, color: '#1D1D1F',
-              marginBottom: '6px', letterSpacing: '-0.01em'
-            }}>密码</label>
-            <input
-              type="password"
-              style={{
-                width: '100%', padding: '11px 16px',
-                border: '1px solid rgba(60,60,67,0.16)',
-                borderRadius: '10px', fontSize: '15px',
-                fontFamily: 'inherit', outline: 'none',
-                transition: 'all 0.2s ease',
-                background: '#F5F5F7',
-                color: '#1D1D1F'
-              }}
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="请输入密码"
-              onFocus={e => { e.target.style.borderColor = '#007AFF'; e.target.style.boxShadow = '0 0 0 3px rgba(0,122,255,0.12)'; e.target.style.background = '#FFFFFF'; }}
-              onBlur={e => { e.target.style.borderColor = 'rgba(60,60,67,0.16)'; e.target.style.boxShadow = 'none'; e.target.style.background = '#F5F5F7'; }}
-            />
+          <div style={{marginBottom:error?14:24}}>
+            <label style={{display:'block',fontSize:12,fontWeight:500,color:'rgba(0,200,255,.6)',marginBottom:6,letterSpacing:'.05em',textTransform:'uppercase'}}>Password</label>
+            <input type="password" style={is} value={password} onChange={e=>setPassword(e.target.value)} placeholder="请输入密码" onFocus={e=>Object.assign(e.target.style,fs)} onBlur={e=>Object.assign(e.target.style,is)}/>
           </div>
-
-          {error && (
-            <p style={{ color: '#FF3B30', fontSize: '13px', marginBottom: '16px', textAlign: 'center' }}>
-              {error}
-            </p>
-          )}
-
-          <button type="submit" disabled={loading} style={{
-            width: '100%', padding: '12px',
-            background: loading ? '#A0C4FF' : '#007AFF',
-            color: '#fff', border: 'none', borderRadius: '12px',
-            fontSize: '16px', fontWeight: 590,
-            cursor: loading ? 'not-allowed' : 'pointer',
-            letterSpacing: '-0.01em',
-            boxShadow: '0 2px 8px rgba(0,122,255,0.25)',
-            transition: 'all 0.2s ease',
-            fontFamily: 'inherit'
-          }}>
-            {loading ? '登录中...' : '登 录'}
-          </button>
+          {error&&<p style={{color:'#ff4466',fontSize:13,marginBottom:16,textAlign:'center'}}>{error}</p>}
+          <button type="submit" disabled={loading} style={{width:'100%',padding:12,background:loading?'rgba(0,100,200,.3)':'linear-gradient(135deg,#06f,#0af)',color:'#fff',border:'none',borderRadius:8,fontSize:15,fontWeight:600,cursor:loading?'not-allowed':'pointer',letterSpacing:'.04em',boxShadow:loading?'none':'0 0 20px rgba(0,100,255,.4)',transition:'all .3s ease',fontFamily:'inherit'}}>{loading?'登录中...':'登 录'}</button>
         </form>
-
-        {/* Account Info */}
-        <div style={{
-          marginTop: '24px', padding: '16px',
-          background: '#F5F5F7', borderRadius: '12px',
-          border: '1px solid rgba(60,60,67,0.08)'
-        }}>
-          <p style={{
-            fontSize: '12px', fontWeight: 590, color: '#86868B',
-            marginBottom: '10px', letterSpacing: '0.02em'
-          }}>默认账号（三权分立）</p>
-          <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: 'left', padding: '4px 0', fontSize: '11px', fontWeight: 590, color: '#AEAEB2' }}>账号</th>
-                <th style={{ textAlign: 'left', padding: '4px 0', fontSize: '11px', fontWeight: 590, color: '#AEAEB2' }}>角色</th>
-                <th style={{ textAlign: 'left', padding: '4px 0', fontSize: '11px', fontWeight: 590, color: '#AEAEB2' }}>密码</th>
-              </tr>
-            </thead>
+        <div style={{marginTop:24,padding:14,background:'rgba(0,150,255,.05)',borderRadius:8,border:'1px solid rgba(0,200,255,.1)'}}>
+          <p style={{fontSize:11,fontWeight:500,color:'rgba(0,200,255,.4)',marginBottom:10,letterSpacing:'.05em',textTransform:'uppercase'}}>默认账号（三权分立）</p>
+          <table style={{width:'100%',fontSize:12,borderCollapse:'collapse'}}>
+            <thead><tr><th style={{textAlign:'left',padding:'3px 0',fontSize:10,fontWeight:500,color:'rgba(0,200,255,.3)'}}>账号</th><th style={{textAlign:'left',padding:'3px 0',fontSize:10,fontWeight:500,color:'rgba(0,200,255,.3)'}}>角色</th><th style={{textAlign:'left',padding:'3px 0',fontSize:10,fontWeight:500,color:'rgba(0,200,255,.3)'}}>密码</th></tr></thead>
             <tbody>
-              <tr><td style={{ padding: '3px 0', color: '#1D1D1F' }}>sysadmin</td><td style={{ color: '#1D1D1F' }}>系统管理员</td><td style={{ color: '#86868B' }}>admin123</td></tr>
-              <tr><td style={{ padding: '3px 0', color: '#1D1D1F' }}>secadmin</td><td style={{ color: '#1D1D1F' }}>安全管理员</td><td style={{ color: '#86868B' }}>admin123</td></tr>
-              <tr><td style={{ padding: '3px 0', color: '#1D1D1F' }}>auditor</td><td style={{ color: '#1D1D1F' }}>安全审计员</td><td style={{ color: '#86868B' }}>admin123</td></tr>
-              <tr><td style={{ padding: '3px 0', color: '#1D1D1F' }}>operator</td><td style={{ color: '#1D1D1F' }}>操作员</td><td style={{ color: '#86868B' }}>admin123</td></tr>
-              <tr><td style={{ padding: '3px 0', color: '#1D1D1F' }}>viewer</td><td style={{ color: '#1D1D1F' }}>只读用户</td><td style={{ color: '#86868B' }}>admin123</td></tr>
+              {[['sysadmin','系统管理员'],['secadmin','安全管理员'],['auditor','安全审计员'],['operator','操作员'],['viewer','只读用户']].map(([u,r])=>(<tr key={u}><td style={{padding:'2px 0',color:'#a0c8ff'}}>{u}</td><td style={{color:'#a0c8ff'}}>{r}</td><td style={{color:'rgba(0,200,255,.4)'}}>admin123</td></tr>))}
             </tbody>
           </table>
         </div>

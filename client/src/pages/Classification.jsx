@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, FileText, Info } from 'lucide-react';
+import { Plus, FileText, Info, Download, Eye } from 'lucide-react';
 import { apiGet, apiPost, hasPermission } from '../api';
 import { PageShell, EmptyState, Modal } from '../components';
 
@@ -10,6 +10,7 @@ export default function Classification() {
   const [classifications, setClassifications] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [exportFormat, setExportFormat] = useState('html');
   const [form, setForm] = useState({ system_id: '', business_impact_level: 2, service_scope: '', business_dependency: '', classification_report: '', classified_by: '' });
 
   const load = () => {
@@ -30,7 +31,23 @@ export default function Classification() {
     <PageShell
       title="系统定级"
       actions={
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>导出格式:</span>
+          <select
+            value={exportFormat}
+            onChange={e => setExportFormat(e.target.value)}
+            style={{
+              padding: '5px 28px 5px 10px', border: '1px solid var(--separator)', borderRadius: '7px',
+              fontSize: '12px', fontFamily: 'inherit', background: 'var(--bg-tertiary)',
+              color: 'var(--text-primary)', cursor: 'pointer', outline: 'none',
+              appearance: 'none',
+              backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'10\' viewBox=\'0 0 10 10\'%3E%3Cpath fill=\'%2386868B\' d=\'M5 7L1 3h8z\'/%3E%3C/svg%3E")',
+              backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center'
+            }}
+          >
+            <option value="html">HTML</option>
+            <option value="pdf">PDF</option>
+          </select>
           <button className="btn" onClick={() => setShowGuide(!showGuide)}><Info size={15} /> 定级指南</button>
           {hasPermission('classification:create') && <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={15} /> 新建定级</button>}
         </div>
@@ -105,9 +122,21 @@ export default function Classification() {
                   <td>{c.classified_by || '-'}</td>
                   <td style={{ fontSize:'12px', color:'var(--text-secondary)' }}>{c.classified_at || '-'}</td>
                   <td>
-                    <a href={"/api/classifications/"+c.id+"/report?token="+localStorage.getItem("djcp_token")} target="_blank" className="btn btn-sm" style={{ textDecoration:'none' }}>
-                      <FileText size={13} /> 报告
-                    </a>
+                    <div className="toolbar">
+                      <a href={"/api/classifications/"+c.id+"/report?token="+localStorage.getItem("djcp_token")} target="_blank" className="btn btn-sm" style={{ textDecoration:'none' }} title="查看报告">
+                        <Eye size={13} /> 查看
+                      </a>
+                      <a
+                        href={"/api/classifications/"+c.id+"/report?format="+exportFormat+"&token="+localStorage.getItem("djcp_token")}
+                        target={exportFormat === 'pdf' ? '_blank' : undefined}
+                        download={exportFormat === 'html' ? '定级报告-'+c.system_name+'.html' : undefined}
+                        className="btn btn-sm"
+                        style={{ textDecoration:'none' }}
+                        title={"导出为 "+exportFormat.toUpperCase()}
+                      >
+                        <Download size={13} /> 导出
+                      </a>
+                    </div>
                   </td>
                 </tr>
               ))}

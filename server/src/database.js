@@ -1,5 +1,6 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const bcrypt = require('bcryptjs');
 
 const DB_PATH = path.join(__dirname, '..', 'djcp.db');
 let db;
@@ -19,7 +20,7 @@ function initTables() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS systems (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, code TEXT UNIQUE, department TEXT, category TEXT CHECK(category IN ('S1','S2','S3','G1','G2','G3')) DEFAULT 'S2', description TEXT, security_level INTEGER CHECK(security_level BETWEEN 1 AND 5), status TEXT CHECK(status IN ('draft','classified','filed','assessing','rectifying','completed')) DEFAULT 'draft', created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE IF NOT EXISTS classifications (id INTEGER PRIMARY KEY AUTOINCREMENT, system_id INTEGER NOT NULL REFERENCES systems(id) ON DELETE CASCADE, business_impact_level INTEGER CHECK(business_impact_level BETWEEN 1 AND 5), service_scope TEXT, business_dependency TEXT, classification_report TEXT, classified_by TEXT, classified_at DATETIME DEFAULT CURRENT_TIMESTAMP, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
-    CREATE TABLE IF NOT EXISTS filings (id INTEGER PRIMARY KEY AUTOINCREMENT, system_id INTEGER NOT NULL REFERENCES systems(id) ON DELETE CASCADE, filing_number TEXT, filing_authority TEXT, filing_date DATE, approval_date DATE, filing_status TEXT CHECK(filing_status IN ('preparing','submitted','approved','rejected')) DEFAULT 'preparing', filing_document TEXT, remarks TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+    CREATE TABLE IF NOT EXISTS filings (id INTEGER PRIMARY KEY AUTOINCREMENT, system_id INTEGER NOT NULL REFERENCES systems(id) ON DELETE CASCADE, filing_number TEXT, filing_authority TEXT, filing_date DATE, approval_date DATE, filing_status TEXT CHECK(filing_status IN ('preparing','submitted','approved','rejected')) DEFAULT 'preparing', filing_document TEXT, filing_year INTEGER, remarks TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE IF NOT EXISTS gap_analyses (id INTEGER PRIMARY KEY AUTOINCREMENT, system_id INTEGER NOT NULL REFERENCES systems(id) ON DELETE CASCADE, analysis_date DATE, overall_score REAL, compliance_rate REAL, status TEXT CHECK(status IN ('draft','in_progress','completed')) DEFAULT 'draft', report TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE IF NOT EXISTS gap_items (id INTEGER PRIMARY KEY AUTOINCREMENT, analysis_id INTEGER NOT NULL REFERENCES gap_analyses(id) ON DELETE CASCADE, requirement_category TEXT, requirement_id TEXT, requirement_desc TEXT, expected_value TEXT, actual_value TEXT, is_compliant INTEGER DEFAULT 0, risk_level TEXT CHECK(risk_level IN ('high','medium','low')), remarks TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE IF NOT EXISTS rectifications (id INTEGER PRIMARY KEY AUTOINCREMENT, system_id INTEGER NOT NULL REFERENCES systems(id) ON DELETE CASCADE, gap_item_id INTEGER REFERENCES gap_items(id) ON DELETE SET NULL, title TEXT NOT NULL, description TEXT, responsible_person TEXT, priority TEXT CHECK(priority IN ('urgent','high','medium','low')) DEFAULT 'medium', status TEXT CHECK(status IN ('pending','in_progress','completed','verified')) DEFAULT 'pending', plan_start_date DATE, plan_end_date DATE, actual_start_date DATE, actual_end_date DATE, cost REAL DEFAULT 0, evidence TEXT, remarks TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);
@@ -76,6 +77,7 @@ function initPermissions() {
     ['permission:view','查看权限','permission','查看角色权限配置'],
     ['permission:manage','管理权限','permission','分配/修改角色权限'],
     ['audit:view','查看审计日志','audit','查看操作审计日志'],
+    ['settings:view','查看系统配置','settings','查看和修改系统配置（LDAP、安全策略等）'],
     ['audit:export','导出审计日志','audit','导出审计日志'],
     ['classification:report','查看定级报告','classification','生成和查看定级报告'],
     ['filing:upload_evidence','上传备案证明','filing','上传备案证明材料图片'],
@@ -96,7 +98,7 @@ function initRolePermissions() {
   for (const code of allPerms) rpStmt.run('system_admin', code);
 
   // 安全管理员
-  const secAdminPerms = ['dashboard:view','system:view','system:create','system:edit','system:delete','classification:view','classification:create','classification:report','filing:view','filing:create','filing:edit','filing:upload_evidence','filing:delete_evidence','gap:view','gap:create','gap:import','rectification:view','rectification:create','rectification:edit','rectification:status','assessment:view','assessment:create','document:view','document:upload','document:edit','document:delete','document:download','user:view','user:create','user:edit','user:reset_password','permission:view','permission:manage'];
+  const secAdminPerms = ['dashboard:view','system:view','system:create','system:edit','system:delete','classification:view','classification:create','classification:report','filing:view','filing:create','filing:edit','filing:upload_evidence','filing:delete_evidence','gap:view','gap:create','gap:import','rectification:view','rectification:create','rectification:edit','rectification:status','assessment:view','assessment:create','document:view','document:upload','document:edit','document:delete','document:download','user:view','user:create','user:edit','user:reset_password','permission:view','permission:manage','settings:view'];
   for (const code of secAdminPerms) rpStmt.run('security_admin', code);
 
   // 安全审计员
@@ -122,6 +124,7 @@ function initSettings() {
     ['ldap_domain', '', 'AD 域名'],
     ['ldap_admin_user', '', 'LDAP 管理员账号'],
     ['ldap_admin_password', '', 'LDAP 管理员密码'],
+    ['upload_path', 'uploads', '文件上传存储路径'],
   ];
   const stmt = db.prepare('INSERT OR IGNORE INTO settings (key, value, description) VALUES (?,?,?)');
   for (const d of defaults) stmt.run(...d);
@@ -133,11 +136,11 @@ function initDefaultUsers() {
 
   // INSERT: (username, password, real_name, role, department, status)
   const stmt = db.prepare('INSERT INTO users (username, password, real_name, role, department, status) VALUES (?,?,?,?,?,?)');
-  stmt.run('sysadmin', 'admin123', '系统管理员', 'system_admin', '信息中心', 'active');
-  stmt.run('secadmin', 'admin123', '安全管理员', 'security_admin', '安全管理部', 'active');
-  stmt.run('auditor', 'admin123', '安全审计员', 'security_auditor', '审计部', 'active');
-  stmt.run('operator', 'admin123', '操作员', 'operator', '技术部', 'active');
-  stmt.run('viewer', 'admin123', '只读用户', 'viewer', '业务部', 'active');
+  stmt.run('sysadmin', bcrypt.hashSync('admin123', 10), '系统管理员', 'system_admin', '信息中心', 'active');
+  stmt.run('secadmin', bcrypt.hashSync('admin123', 10), '安全管理员', 'security_admin', '安全管理部', 'active');
+  stmt.run('auditor', bcrypt.hashSync('admin123', 10), '安全审计员', 'security_auditor', '审计部', 'active');
+  stmt.run('operator', bcrypt.hashSync('admin123', 10), '操作员', 'operator', '技术部', 'active');
+  stmt.run('viewer', bcrypt.hashSync('admin123', 10), '只读用户', 'viewer', '业务部', 'active');
 }
 
 module.exports = { getDb };

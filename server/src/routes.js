@@ -7,6 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 const XLSX = require('xlsx');
 const ldap = require('ldapjs');
+const PDFDocument = require('pdfkit');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'djcp_jwt_secret_key_2026';
@@ -68,6 +69,125 @@ function ldapAuthenticate(username, password, settings) {
     });
   });
 }
+// LDAP/AD 多阶段连接验证测试
+function ldapTestConnection(settings) {
+  return new Promise((resolve) => {
+    const steps = [];
+    const url = 'ldap://' + settings.ldap_server + ':' + (settings.ldap_port || '389');
+    const client = ldap.createClient({ url, connectTimeout: 5000 });
+    let settled = false;
+
+    function finish(result) {
+      if (settled) return;
+      settled = true;
+      try { client.destroy(); } catch (_) {}
+      resolve(result);
+    }
+
+    // Step 1: TCP 连接测试
+    const step1Start = Date.now();
+    let step1Done = false;
+
+    client.on('connectError', () => {
+      if (!step1Done) {
+        step1Done = true;
+        steps.push({ step: 1, name: 'TCP 连接', status: 'fail', message: '无法连接域控服务器，请检查服务器地址和端口', elapsed: Date.now() - step1Start });
+      }
+      finish({ success: false, steps, message: '连接失败', elapsed: Date.now() - step1Start });
+    });
+
+    client.on('connectTimeout', () => {
+      if (!step1Done) {
+        step1Done = true;
+        steps.push({ step: 1, name: 'TCP 连接', status: 'fail', message: '连接超时，请检查网络和防火墙设置', elapsed: Date.now() - step1Start });
+      }
+      finish({ success: false, steps, message: '连接超时', elapsed: Date.now() - step1Start });
+    });
+
+    client.on('error', (err) => {
+      if (!step1Done) {
+        step1Done = true;
+        steps.push({ step: 1, name: 'TCP 连接', status: 'fail', message: '连接异常: ' + (err.message || '未知错误'), elapsed: Date.now() - step1Start });
+      }
+    });
+
+    // 等待连接建立
+    setTimeout(() => {
+      if (step1Done) return;
+      step1Done = true;
+      steps.push({ step: 1, name: 'TCP 连接', status: 'pass', message: '成功连接至 ' + url, elapsed: Date.now() - step1Start });
+
+      // Step 2: 管理员绑定认证测试
+      const step2Start = Date.now();
+      let dn;
+      if (settings.ldap_domain) {
+        dn = settings.ldap_admin_user + '@' + settings.ldap_domain;
+      } else {
+        dn = 'CN=' + settings.ldap_admin_user + ',' + settings.ldap_base_dn;
+      }
+
+      client.bind(dn, settings.ldap_admin_password, (err) => {
+        if (err) {
+          const msg = err.message || '';
+          let errMsg = '认证失败';
+          if (msg.includes('invalidCredentials') || msg.includes('Invalid Credentials')) {
+            errMsg = '管理员账号或密码错误';
+          } else {
+            errMsg = '绑定失败: ' + (msg || '未知错误');
+          }
+          steps.push({ step: 2, name: '管理员绑定认证', status: 'fail', message: errMsg, elapsed: Date.now() - step2Start });
+          finish({ success: false, steps, message: '认证失败', elapsed: Date.now() - step1Start });
+          return;
+        }
+        steps.push({ step: 2, name: '管理员绑定认证', status: 'pass', message: '认证成功 (DN: ' + dn + ')', elapsed: Date.now() - step2Start });
+
+        // Step 3: 目录搜索测试
+        const step3Start = Date.now();
+        const searchBase = settings.ldap_base_dn || (settings.ldap_domain ? settings.ldap_domain.split('.').map(p => 'DC=' + p).join(',') : '');
+
+        if (!searchBase) {
+          steps.push({ step: 3, name: '目录搜索', status: 'skip', message: '未配置 Base DN，跳过搜索测试', elapsed: 0 });
+          finish({ success: true, steps, message: '连接和认证成功（已跳过搜索测试）', elapsed: Date.now() - step1Start });
+          return;
+        }
+
+        const opts = {
+          filter: '(objectClass=user)',
+          scope: 'sub',
+          sizeLimit: 10,
+          timeLimit: 5
+        };
+
+        let searchFailed = false;
+        client.search(searchBase, opts, (searchErr, res) => {
+          if (searchErr) {
+            if (searchFailed) return;
+            searchFailed = true;
+            steps.push({ step: 3, name: '目录搜索', status: 'fail', message: '搜索失败: ' + (searchErr.message || '未知错误'), elapsed: Date.now() - step3Start });
+            finish({ success: true, steps, message: '连接和认证成功，但搜索失败', elapsed: Date.now() - step1Start });
+            return;
+          }
+
+          let userCount = 0;
+          res.on('searchEntry', () => { userCount++; });
+          res.on('error', (e) => {
+            if (searchFailed) return;
+            searchFailed = true;
+            steps.push({ step: 3, name: '目录搜索', status: 'fail', message: '搜索出错: ' + (e.message || ''), elapsed: Date.now() - step3Start });
+            finish({ success: true, steps, message: '连接和认证成功，但搜索出错', elapsed: Date.now() - step1Start });
+          });
+          res.on('end', () => {
+            if (searchFailed) return;
+            searchFailed = true;
+            steps.push({ step: 3, name: '目录搜索', status: 'pass', message: '搜索成功，发现 ' + userCount + ' 个用户对象', elapsed: Date.now() - step3Start });
+            finish({ success: true, steps, message: '全部验证通过', elapsed: Date.now() - step1Start });
+          });
+        });
+      });
+    }, 100);
+  });
+}
+
 
 // 写入审计日志
 function auditLog(db, userId, username, realName, action, module, targetType, targetId, detail, result) {
@@ -124,10 +244,24 @@ function requirePermission(...permCodes) {
 }
 
 // Multer config
-const uploadDir = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+// 从配置读取上传路径，默认为 uploads
+function getUploadDir() {
+  try {
+    const db = getDb();
+    const row = db.prepare("SELECT value FROM settings WHERE key='upload_path'").get();
+    const configured = row?.value || 'uploads';
+    // 如果是相对路径，相对于 server 目录
+    const dir = path.isAbsolute(configured) ? configured : path.join(__dirname, '..', configured);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  } catch (_) {
+    const dir = path.join(__dirname, '..', 'uploads');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+}
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
+  destination: (req, file, cb) => cb(null, getUploadDir()),
   filename: (req, file, cb) => cb(null, uuidv4() + path.extname(file.originalname))
 });
 const upload = multer({ storage });
@@ -141,7 +275,7 @@ router.post('/api/gap-analyses/import', requirePermission('gap:create'), upload.
 
   try {
     const ext = path.extname(req.file.originalname).toLowerCase();
-    const filePath = path.join(uploadDir, req.file.filename);
+    const filePath = path.join(getUploadDir(), req.file.filename);
 
     if (ext === '.csv') {
       // Parse CSV
@@ -205,7 +339,7 @@ router.post('/api/gap-analyses/import', requirePermission('gap:create'), upload.
     auditLog(db, req.user.id, req.user.username, req.user.real_name, 'import', 'gap_analysis', 'file', null, `导入差距分析文件: ${req.file.originalname}, 识别 ${result.length} 项`);
     res.json({ success: true, count: result.length, items: result });
   } catch (e) {
-    try { fs.unlinkSync(path.join(uploadDir, req.file.filename)); } catch (_) {}
+    try { fs.unlinkSync(path.join(getUploadDir(), req.file.filename)); } catch (_) {}
     res.status(400).json({ error: '文件解析失败: ' + e.message });
   }
 });
@@ -393,6 +527,125 @@ router.post('/api/classifications', requirePermission('classification:create'), 
   res.json({ id: result.lastInsertRowid, ...req.body });
 });
 
+// PDF 报告生成函数
+const FONT_PATH = '/Library/Fonts/Arial Unicode.ttf';
+function generateClassificationPDF(cls) {
+  return new Promise((resolve, reject) => {
+    const levelLabels = { 1: '自主保护级', 2: '指导保护级', 3: '监督保护级', 4: '强制保护级', 5: '专控保护级' };
+    const catLabels = { S1:'业务信息安全-一般', S2:'业务信息安全-严重', S3:'业务信息安全-特别严重', G1:'系统服务安全-一般', G2:'系统服务安全-严重', G3:'系统服务安全-特别严重' };
+    const reportDate = new Date().toISOString().slice(0,10);
+
+    const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
+    const chunks = [];
+    doc.on('data', c => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    doc.registerFont('CJK', FONT_PATH);
+    doc.font('CJK');
+
+    // 标题
+    doc.fontSize(20).fillColor('#1a56db').text('网络安全等级保护定级报告', { align: 'center' });
+    doc.moveDown(0.3);
+    doc.fontSize(11).fillColor('#666')
+      .text('报告编号: DJCP-DJ-' + String(cls.id).padStart(4,'0') + '  |  生成日期: ' + reportDate, { align: 'center' });
+    doc.moveDown(0.8);
+
+    // 辅助函数
+    const drawLine = () => { doc.moveDown(0.3).strokeColor('#d1d5db').lineWidth(1).moveTo(50, doc.y).lineTo(545, doc.y).stroke().moveDown(0.8); };
+    const sectionTitle = (text) => { doc.moveDown(0.5).fontSize(15).fillColor('#1a56db').text(text).moveDown(0.3); };
+    const row = (label, value, labelW) => {
+      labelW = labelW || 130;
+      const y = doc.y;
+      doc.fontSize(11).fillColor('#333');
+      doc.text(label, 50, y, { width: labelW });
+      doc.fillColor('#000').text(value || '-', 50 + labelW, y, { width: 495 - labelW });
+    };
+
+    // 一、信息系统基本信息
+    drawLine();
+    sectionTitle('一、信息系统基本信息');
+    doc.fontSize(11).fillColor('#333');
+    row('系统名称', cls.system_name); doc.moveDown(0.2);
+    row('系统编号', cls.system_code); doc.moveDown(0.2);
+    row('所属部门', cls.department); doc.moveDown(0.2);
+    row('系统类别', catLabels[cls.category] || cls.category); doc.moveDown(0.2);
+    row('安全保护等级', '第' + (cls.security_level || '-') + '级 ' + (levelLabels[cls.security_level] || '')); doc.moveDown(0.2);
+    row('系统描述', cls.system_desc); doc.moveDown(0.5);
+
+    // 二、定级结果
+    drawLine();
+    sectionTitle('二、定级结果');
+    row('业务信息安全等级', '第' + cls.business_impact_level + '级 ' + levelLabels[cls.business_impact_level]); doc.moveDown(0.2);
+    row('服务范围', cls.service_scope); doc.moveDown(0.2);
+    row('业务依赖描述', cls.business_dependency); doc.moveDown(0.2);
+    row('定级人', cls.classified_by); doc.moveDown(0.2);
+    row('定级日期', cls.classified_at); doc.moveDown(0.5);
+
+    // 三、定级依据
+    drawLine();
+    sectionTitle('三、定级依据');
+    doc.fontSize(11).fillColor('#000')
+      .text('根据《信息安全技术 网络安全等级保护定级指南》（GB/T 22240-2020），结合信息系统在国家安全、经济建设、社会生活中的重要程度，以及系统遭到破坏后对国家安全、社会秩序、公共利益以及公民、法人和其他组织合法权益的危害程度等因素，确定信息系统的安全保护等级。', { align: 'justify' });
+    doc.moveDown(0.5);
+
+    // 四、定级矩阵
+    drawLine();
+    sectionTitle('四、等级保护定级矩阵');
+    const matrixData = [
+      ['', 'G1 一般损害', 'G2 严重损害', 'G3 特别严重损害'],
+      ['S1 一般损害', '第一级', '第二级', '第三级'],
+      ['S2 严重损害', '第二级', '第三级', '第四级'],
+      ['S3 特别严重损害', '第三级', '第四级', '第五级']
+    ];
+    const colW = [130, 120, 120, 120];
+    const rowH = 28;
+    const startX = 50;
+    let tableY = doc.y;
+    const levels = [null, 1, 2, 3, 2, 3, 4, 3, 4, 5];
+
+    matrixData.forEach((r, ri) => {
+      let x = startX;
+      r.forEach((cell, ci) => {
+        const isMatch = ri > 0 && ci > 0 && levels[(ri-1)*3 + ci] === cls.business_impact_level;
+        if (isMatch) {
+          doc.rect(x, tableY, colW[ci], rowH).fill('#fef2f2');
+        }
+        if (ri === 0) {
+          doc.rect(x, tableY, colW[ci], rowH).fillAndStroke('#1e3a5f', '#1e3a5f');
+          doc.fillColor('#fff');
+        } else {
+          doc.rect(x, tableY, colW[ci], rowH).stroke('#d1d5db');
+          doc.fillColor(isMatch ? '#dc2626' : '#000');
+        }
+        doc.fontSize(10).text(cell, x + 4, tableY + 7, { width: colW[ci] - 8, align: 'center' });
+        x += colW[ci];
+      });
+      tableY += rowH;
+    });
+    doc.y = tableY + 12;
+    doc.fontSize(12).fillColor('#dc2626')
+      .text('▲ 当前定级结果：第' + cls.business_impact_level + '级 - ' + levelLabels[cls.business_impact_level], { align: 'center' });
+    doc.moveDown(0.8);
+
+    // 五、定级说明
+    drawLine();
+    sectionTitle('五、定级说明');
+    doc.fontSize(11).fillColor('#000')
+      .text(cls.classification_report || '（详见定级报告正文）', { align: 'justify' });
+    doc.moveDown(1.5);
+
+    // 页脚
+    doc.strokeColor('#d1d5db').lineWidth(0.5).moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+    doc.moveDown(0.5);
+    doc.fontSize(10).fillColor('#999')
+      .text('报告生成时间: ' + new Date().toLocaleString('zh-CN'), { align: 'right' });
+    doc.text('本报告由等保测评全生命周期管理系统自动生成', { align: 'right' });
+
+    doc.end();
+  });
+}
+
 // 生成定级报告
 router.get('/api/classifications/:id/report', (req, res) => {
   const token = req.query.token || (req.headers.authorization || '').replace('Bearer ', '');
@@ -483,8 +736,28 @@ router.get('/api/classifications/:id/report', (req, res) => {
 </body>
 </html>`;
 
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(html);
+  const format = req.query.format || 'html';
+  const filename = `定级报告-${cls.system_name}-${new Date().toISOString().slice(0,10)}`;
+  
+  if (format === 'pdf') {
+    // PDF 模式：生成真实 PDF 文件
+    generateClassificationPDF(cls).then(pdfBuffer => {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename + '.pdf')}`);
+      res.send(pdfBuffer);
+    }).catch(err => {
+      console.error('PDF generation error:', err);
+      res.status(500).json({ error: 'PDF 生成失败' });
+    });
+  } else {
+    // HTML 模式
+    const download = req.query.download === '1';
+    if (download) {
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename + '.html')}`);
+    }
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  }
 });
 
 // ===================== 备案管理 =====================
@@ -492,7 +765,7 @@ router.get('/api/classifications/:id/report', (req, res) => {
 // 备案年份列表
 router.get('/api/filings/years', requirePermission('filing:view'), (req, res) => {
   const db = getDb();
-  const years = db.prepare("SELECT DISTINCT strftime('%Y', filing_date) as year FROM filings WHERE filing_date IS NOT NULL ORDER BY year DESC").all();
+  const years = db.prepare("SELECT DISTINCT COALESCE(filing_year, CAST(strftime('%Y', filing_date) AS INTEGER)) as year FROM filings WHERE filing_year IS NOT NULL OR filing_date IS NOT NULL ORDER BY year DESC").all();
   res.json(years.map(y => y.year));
 });
 
@@ -501,7 +774,7 @@ router.get('/api/filings', requirePermission('filing:view'), (req, res) => {
   const { year, status } = req.query;
   let sql = 'SELECT f.*, s.name as system_name FROM filings f JOIN systems s ON f.system_id = s.id WHERE 1=1';
   const params = [];
-  if (year) { sql += " AND strftime('%Y', f.filing_date) = ?"; params.push(year); }
+  if (year) { sql += " AND COALESCE(f.filing_year, CAST(strftime('%Y', f.filing_date) AS INTEGER)) = ?"; params.push(parseInt(year)); }
   if (status) { sql += ' AND f.filing_status = ?'; params.push(status); }
   sql += ' ORDER BY f.filing_date DESC';
   res.json(db.prepare(sql).all(...params));
@@ -509,9 +782,9 @@ router.get('/api/filings', requirePermission('filing:view'), (req, res) => {
 
 router.post('/api/filings', requirePermission('filing:create'), (req, res) => {
   const db = getDb();
-  const { system_id, filing_number, filing_authority, filing_date, filing_status, filing_document, remarks } = req.body;
-  const result = db.prepare('INSERT INTO filings (system_id, filing_number, filing_authority, filing_date, filing_status, filing_document, remarks) VALUES (?,?,?,?,?,?,?)')
-    .run(system_id, filing_number, filing_authority, filing_date, filing_status || 'preparing', filing_document, remarks);
+  const { system_id, filing_number, filing_authority, filing_date, filing_status, filing_document, filing_year, remarks } = req.body;
+  const result = db.prepare('INSERT INTO filings (system_id, filing_number, filing_authority, filing_date, filing_status, filing_document, filing_year, remarks) VALUES (?,?,?,?,?,?,?,?)')
+    .run(system_id, filing_number, filing_authority, filing_date, filing_status || 'preparing', filing_document, filing_year || new Date().getFullYear(), remarks);
   if (filing_status === 'approved') {
     db.prepare("UPDATE systems SET status='filed', updated_at=CURRENT_TIMESTAMP WHERE id=?").run(system_id);
   }
@@ -521,9 +794,9 @@ router.post('/api/filings', requirePermission('filing:create'), (req, res) => {
 
 router.put('/api/filings/:id', requirePermission('filing:edit'), (req, res) => {
   const db = getDb();
-  const { filing_number, filing_authority, filing_date, approval_date, filing_status, filing_document, remarks } = req.body;
-  db.prepare('UPDATE filings SET filing_number=?, filing_authority=?, filing_date=?, approval_date=?, filing_status=?, filing_document=?, remarks=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
-    .run(filing_number, filing_authority, filing_date, approval_date, filing_status, filing_document, remarks, req.params.id);
+  const { filing_number, filing_authority, filing_date, approval_date, filing_status, filing_document, filing_year, remarks } = req.body;
+  db.prepare('UPDATE filings SET filing_number=?, filing_authority=?, filing_date=?, approval_date=?, filing_status=?, filing_document=?, filing_year=?, remarks=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+    .run(filing_number, filing_authority, filing_date, approval_date, filing_status, filing_document, filing_year, remarks, req.params.id);
   if (filing_status === 'approved') {
     const filing = db.prepare('SELECT system_id FROM filings WHERE id=?').get(req.params.id);
     if (filing) db.prepare("UPDATE systems SET status='filed', updated_at=CURRENT_TIMESTAMP WHERE id=?").run(filing.system_id);
@@ -565,7 +838,7 @@ router.get('/api/filings/:id/evidences/:eid/file', (req, res) => {
   const evidence = db.prepare('SELECT * FROM filing_evidences WHERE id=? AND filing_id=?').get(req.params.eid, req.params.id);
   if (!evidence) return res.status(404).json({ error: '图片不存在' });
 
-  const filePath = path.join(uploadDir, evidence.filename);
+  const filePath = path.join(getUploadDir(), evidence.filename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: '文件不存在' });
 
   res.setHeader('Content-Type', evidence.mime_type || 'image/png');
@@ -579,7 +852,7 @@ router.delete('/api/filings/:id/evidences/:eid', requirePermission('filing:edit'
   const evidence = db.prepare('SELECT * FROM filing_evidences WHERE id=? AND filing_id=?').get(req.params.eid, req.params.id);
   if (!evidence) return res.status(404).json({ error: '图片不存在' });
 
-  const filePath = path.join(uploadDir, evidence.filename);
+  const filePath = path.join(getUploadDir(), evidence.filename);
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
   db.prepare('DELETE FROM filing_evidences WHERE id=?').run(req.params.eid);
@@ -705,7 +978,7 @@ router.get('/api/rectifications/:id/evidences/:eid/file', (req, res) => {
   const evidence = db.prepare('SELECT * FROM rectification_evidences WHERE id=? AND rectification_id=?').get(req.params.eid, req.params.id);
   if (!evidence) return res.status(404).json({ error: '截图不存在' });
 
-  const filePath = path.join(uploadDir, evidence.filename);
+  const filePath = path.join(getUploadDir(), evidence.filename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: '文件不存在' });
 
   res.setHeader('Content-Type', evidence.mime_type || 'image/png');
@@ -720,7 +993,7 @@ router.delete('/api/rectifications/:id/evidences/:eid', requirePermission('recti
   const evidence = db.prepare('SELECT * FROM rectification_evidences WHERE id=? AND rectification_id=?').get(req.params.eid, req.params.id);
   if (!evidence) return res.status(404).json({ error: '截图不存在' });
 
-  const filePath = path.join(uploadDir, evidence.filename);
+  const filePath = path.join(getUploadDir(), evidence.filename);
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
   db.prepare('DELETE FROM rectification_evidences WHERE id=?').run(req.params.eid);
@@ -815,7 +1088,7 @@ router.get('/api/documents/:id/download', (req, res) => {
   if (!userId) return res.status(401).json({ error: '令牌无效或已过期' });
   const doc = db.prepare('SELECT * FROM documents WHERE id=?').get(req.params.id);
   if (!doc || !doc.file_path) return res.status(404).json({ error: '文件不存在' });
-  const filePath = path.join(uploadDir, doc.file_path);
+  const filePath = path.join(getUploadDir(), doc.file_path);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: '文件不存在' });
   res.download(filePath, doc.title + path.extname(doc.file_path));
 });
@@ -971,6 +1244,30 @@ router.put('/api/settings', requirePermission('permission:manage'), (req, res) =
   }
   auditLog(db, req.user.id, req.user.username, req.user.real_name, 'update_settings', 'settings', 'settings', null, '更新系统配置');
   res.json({ success: true });
+});
+
+// LDAP 连接测试
+router.post('/api/settings/ldap/test', requirePermission('settings:view'), async (req, res) => {
+  const { ldap_server, ldap_port, ldap_domain, ldap_base_dn, ldap_admin_user, ldap_admin_password } = req.body;
+  
+  if (!ldap_server) return res.status(400).json({ success: false, message: '请填写 LDAP 服务器地址' });
+  if (!ldap_admin_user) return res.status(400).json({ success: false, message: '请填写 LDAP 管理员账号' });
+
+  const settings = {
+    ldap_server, ldap_port: ldap_port || '389',
+    ldap_domain: ldap_domain || '',
+    ldap_base_dn: ldap_base_dn || ''
+  };
+
+  const startTime = Date.now();
+  try {
+    await ldapAuthenticate(ldap_admin_user, ldap_admin_password, settings);
+    const elapsed = Date.now() - startTime;
+    res.json({ success: true, message: `连接成功！响应时间: ${elapsed}ms`, elapsed });
+  } catch (e) {
+    const elapsed = Date.now() - startTime;
+    res.json({ success: false, message: e.message, elapsed });
+  }
 });
 
 module.exports = router;

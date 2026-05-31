@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Server, Shield, Database, RefreshCw, Wifi, WifiOff, CheckCircle, XCircle, SkipForward, Loader } from 'lucide-react';
+import { Save, Server, Shield, Database, RefreshCw, Wifi, WifiOff, CheckCircle, XCircle, SkipForward, Loader, FolderOpen } from 'lucide-react';
 import { apiGet, apiPut } from '../api';
 
 export default function SystemSettings() {
@@ -30,6 +30,7 @@ export default function SystemSettings() {
 
   const tabs = [
     { key: 'ldap', icon: <Server size={14} />, label: 'LDAP/AD 域控' },
+    { key: 'storage', icon: <FolderOpen size={14} />, label: '存储配置' },
     { key: 'system', icon: <Database size={14} />, label: '系统信息' },
     { key: 'security', icon: <Shield size={14} />, label: '安全策略' },
   ];
@@ -42,6 +43,10 @@ export default function SystemSettings() {
     { key: 'ldap_base_dn', label: 'LDAP 基础 DN', placeholder: '如: DC=company,DC=com' },
     { key: 'ldap_admin_user', label: 'LDAP 管理员账号', placeholder: '如: administrator' },
     { key: 'ldap_admin_password', label: 'LDAP 管理员密码', type: 'password', placeholder: '管理员密码' },
+  ];
+
+  const storageFields = [
+    { key: 'upload_path', label: '文件上传存储路径', placeholder: '如: /data/uploads 或 uploads', description: '支持绝对路径或相对于 server 目录的相对路径，修改后需重启服务生效' },
   ];
 
   const handleLdapTest = async () => {
@@ -221,6 +226,26 @@ export default function SystemSettings() {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'storage' && (
+          <div className="card">
+            <div className="card-header">
+              <FolderOpen size={16} /> 存储配置
+            </div>
+            <div className="card-body">
+              <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
+                配置文件上传的存储路径。默认为 server/uploads 目录。修改后需重启后端服务生效。
+              </p>
+              {storageFields.map(f => (
+                <div key={f.key} className="form-group">
+                  <label>{f.label}</label>
+                  <input className="form-control" value={settingVal(f.key)} onChange={e => updateSetting(f.key, e.target.value)} placeholder={f.placeholder} />
+                  {f.description && <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>{f.description}</p>}
+                </div>
+              ))}
             </div>
           </div>
         )}
