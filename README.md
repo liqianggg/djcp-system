@@ -1,17 +1,17 @@
-# 等保测评全生命周期管理系统
+# 等保测评全生命周期管理系统 v1.0
 
-网络安全等级保护（DJCP）管理平台，覆盖信息系统定级、备案、差距分析、整改、测评的全生命周期。采用三权分立权限模型。
+网络安全等级保护（DJCP）管理平台，覆盖信息系统定级、备案、差距分析、整改、测评的全生命周期。采用三权分立权限模型，仿 Apple 风格 UI。
 
 ## 技术栈
 
 | 层级 | 技术 |
 |------|------|
-| 前端 | React 19 + Vite 8 + React Router 7 |
-| 后端 | Node.js + Express 5 |
-| 数据库 | SQLite (better-sqlite3) |
-| 认证 | JWT + Session 双模式，支持 LDAP/AD 域控 |
-| 图表 | Recharts |
-| 图标 | Lucide React |
+| 前端 | React 19 + Vite 8 + React Router 7 + Recharts + Lucide React |
+| 后端 | Node.js + Express 5 + better-sqlite3 |
+| 认证 | JWT + bcryptjs，支持 LDAP/AD 域控 |
+| PDF 导出 | PDFKit + Arial Unicode 中文字体 |
+| 文件处理 | multer (上传) + xlsx (Excel 导入) |
+| 安全 | helmet + express-rate-limit + CORS |
 
 ## 快速开始
 
@@ -20,139 +20,188 @@
 cd server && npm install
 cd ../client && npm install
 
+# 构建前端
+cd client && npm run build
+
 # 启动服务
-cd .. && ./start.sh
+cd ../server && npm start
 ```
 
-| 服务 | 地址 |
-|------|------|
-| 前端开发 | http://localhost:5173 |
-| 后端 API | http://localhost:3001 |
+| 服务 | 地址 | 说明 |
+|------|------|------|
+| 生产模式 | http://localhost:3001 | Express 托管前后端 |
+| 前端开发 | http://localhost:5173 | Vite 热更新 |
+| 后端 API | http://localhost:3001 | REST API |
 
 ## 默认账号（三权分立）
 
-| 账号 | 密码 | 角色 |
-|------|------|------|
-| sysadmin | admin123 | 系统管理员 |
-| secadmin | admin123 | 安全管理员 |
-| auditor | admin123 | 安全审计员 |
-| operator | admin123 | 操作员 |
-| viewer | admin123 | 只读用户 |
+| 用户名 | 密码 | 角色 | 权限范围 |
+|--------|------|------|----------|
+| `sysadmin` | admin123 | 系统管理员 | 全部权限 |
+| `secadmin` | admin123 | 安全管理员 | 业务 + 用户管理 |
+| `auditor` | admin123 | 安全审计员 | 只读 + 审计日志 |
+| `operator` | admin123 | 操作员 | 业务功能 |
+| `viewer` | admin123 | 只读用户 | 仅查看 |
+
+> ⚠️ **首次登录后请立即修改密码！**
 
 ## 功能模块
 
 ### 工作台
-- 系统总数、文档数、整改任务数、测评数概览
+- 统计概览：系统总数、已定级、已备案、整改中数量
+- 按安全等级分布图表
 - 超期整改任务提醒
 
 ### 信息系统管理
-- 6 种生命周期状态：draft → classified → filed → assessing → rectifying → completed
-- 安全等级 L1-L5 / 类别 S1-S3, G1-G3
+- 6 种生命周期状态流转：draft → classified → filed → assessing → rectifying → completed
+- 安全等级 L1-L5，系统类别 S1-S3 / G1-G3
+- 增删改查 + 状态筛选
 
 ### 系统定级
-- 依据 GB/T 22240-2020 定级矩阵
-- 一键生成 HTML 定级报告（含 S×G 矩阵，当前等级高亮）
+- 依据 GB/T 22240-2020 定级矩阵 (S×G)
+- 一键生成定级报告，支持 **HTML 预览** 和 **PDF 下载**（含中文字体）
+- 报告包含：基本信息、定级结果、定级依据、定级矩阵、定级说明
 
 ### 备案管理
-- 备案号、备案机关、提交/审批状态管理
+- 备案号、备案机关、备案日期、备案年份、审批状态
+- 状态流转：preparing → submitted → approved → rejected
+- **备案证明图片上传/预览/下载**
+- 按年份和状态筛选
 
 ### 差距分析
 - 差距项管理（物理/网络/主机/数据/应用/安全管理）
-- 合规/不合规判定 + 风险等级
+- 合规/不合规判定 + 风险等级 (高/中/低)
+- **Excel 一键导入识别差距项**
+- 自动计算合规率与总体评分
 
 ### 整改管理
-- 任务优先级、状态流转（待处理→进行中→已完成→已验证）
-- 整改截图上传（支持多图，`<img>` 标签免认证查看）
-- 费用追踪
+- 任务优先级 (urgent/high/medium/low)
+- 状态流转：pending → in_progress → completed → verified
+- **整改证明截图上传与在线查看**
+- 计划/实际日期跟踪，费用追踪
 
 ### 测评管理
-- 测评机构、测评类型
-- 逐项评分（符合/部分符合/不符合/不适用）
-- 结论：通过 / 有条件通过 / 未通过
+- 测评类型：initial / reassessment / annual
+- 逐项评分：符合 / 部分符合 / 不符合 / 不适用
+- 结论：pass / fail / conditional_pass
 
 ### 文档管理
-- 6 种文档类型：管理制度/操作规程/记录表单/测评报告/整改证据/其他
-- 关联信息系统，上传人自动绑定登录用户
+- 6 种文档类型：policy / procedure / record / report / evidence / other
+- 关联信息系统，版本号管理
+- 上传/下载/编辑/删除
 
 ### 用户管理
-- 登录方式：本地认证 / 域控认证（LDAP/AD）
+- 登录方式：本地认证 / LDAP 域控认证
 - 三权分立角色体系
-- 账号启停用
+- 账号启停用、密码重置
 
 ### 权限管理
-- 30+ 细粒度权限，按角色分配
-- 权限模块：仪表盘、系统、定级、备案、差距、整改、测评、文档、用户、审计
+- 30+ 细粒度操作权限（如 `filing:create`）
+- 按角色批量分配权限
+- 前端路由 + 后端 API 双重校验
 
 ### 审计日志
-- 全操作记录（登录、创建、修改、删除、状态变更）
-- 支持按用户/操作/模块/时间筛选
+- 全操作记录（含失败登录尝试）
+- 按用户/操作/模块/时间范围筛选
 - CSV 导出
 
-### LDAP/AD 域控
-- 7 项配置参数（服务器、端口、域名、管理员等）
-- 启用/禁用开关
-- 用户级 `login_type` 切换
-- 连接异常友好提示
+### 系统管理
+- **LDAP/AD 域控配置**：7 项参数，支持一键连接测试
+- **文件上传路径配置**：可自定义存储位置
+- 配置持久化存储
 
 ## 项目结构
 
 ```
 djcp-system/
-├── start.sh              # 一键启动脚本
 ├── README.md
+├── .gitignore
 ├── server/
 │   ├── package.json
-│   ├── djcp.db            # SQLite 数据库
-│   ├── uploads/           # 文件上传目录
+│   ├── djcp.db               # SQLite 数据库 (gitignore)
+│   ├── uploads/               # 文件上传目录 (gitignore)
 │   └── src/
-│       ├── index.js       # 入口，Express 配置
-│       ├── database.js    # 数据库初始化 & 种子数据
-│       └── routes.js      # 全部 API 路由
-└── client/
-    ├── package.json
-    ├── vite.config.js     # Vite 配置 + API 代理
-    ├── index.html
-    ├── dist/              # 构建产物
-    └── src/
-        ├── main.jsx       # React 入口
-        ├── App.jsx        # 路由、布局、登录页
-        ├── api.js         # API 请求封装
-        ├── index.css      # 全局样式
-        ├── components.jsx # 公共组件
-        └── pages/
-            ├── Dashboard.jsx          # 工作台
-            ├── Systems.jsx            # 信息系统
-            ├── Classification.jsx     # 系统定级
-            ├── Filing.jsx             # 备案管理
-            ├── GapAnalysis.jsx        # 差距分析
-            ├── Rectification.jsx      # 整改管理
-            ├── Assessment.jsx         # 测评管理
-            ├── Documents.jsx          # 文档管理
-            ├── UserManagement.jsx     # 用户管理
-            ├── PermissionManagement.jsx # 权限管理
-            └── AuditLog.jsx           # 审计日志
+│       ├── index.js           # Express 入口 (helmet/CORS/限流)
+│       ├── database.js        # 表结构 + 种子数据 + 权限初始化
+│       └── routes.js          # 全部 50+ API 路由
+├── client/
+│   ├── package.json
+│   ├── vite.config.js
+│   ├── dist/                  # 构建产物
+│   └── src/
+│       ├── main.jsx
+│       ├── App.jsx            # 路由/布局/认证/侧边栏
+│       ├── api.js             # API 请求封装
+│       ├── components.jsx     # 公共组件
+│       └── pages/             # 12 个页面组件
+│           ├── Dashboard.jsx          # 工作台
+│           ├── Systems.jsx            # 信息系统
+│           ├── Classification.jsx     # 系统定级 + 报告导出
+│           ├── Filing.jsx             # 备案管理 + 证明上传
+│           ├── GapAnalysis.jsx        # 差距分析 + Excel导入
+│           ├── Rectification.jsx      # 整改管理 + 截图上传
+│           ├── Assessment.jsx         # 测评管理
+│           ├── Documents.jsx          # 文档管理
+│           ├── UserManagement.jsx     # 用户管理
+│           ├── PermissionManagement.jsx # 权限管理
+│           ├── AuditLog.jsx           # 审计日志
+│           └── SystemSettings.jsx     # 系统管理 (LDAP/上传路径)
+└── docs/
+    ├── 需求文档.md            # 功能需求与业务规范
+    ├── 设计文档.md            # 架构/数据库/API 设计
+    └── 运维文档.md            # 部署/备份/故障排查
 ```
 
 ## API 概览
 
+### 认证
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | /api/login | 登录认证 |
-| POST | /api/logout | 登出 |
-| GET | /api/me | 当前用户信息 |
-| GET | /api/dashboard/stats | 工作台统计 |
-| GET/POST | /api/systems | 信息系统 CRUD |
-| GET/POST | /api/classifications | 系统定级 |
-| GET | /api/classifications/:id/report | 定级报告 |
-| GET/POST/PUT | /api/filings | 备案管理 |
-| GET/POST | /api/gap-analyses | 差距分析 |
-| GET/POST/PUT/DELETE | /api/rectifications | 整改任务 |
-| POST | /api/rectifications/:id/evidences | 上传整改截图 |
-| GET | /api/rectifications/:id/evidences/:eid/file | 查看截图 |
-| GET/POST | /api/assessments | 测评管理 |
-| GET/POST/PUT/DELETE | /api/documents | 文档管理 |
-| GET | /api/documents/:id/download | 下载文档 |
-| GET/POST/PUT/DELETE | /api/users | 用户管理 |
-| GET/PUT | /api/permissions | 权限管理 |
-| GET | /api/audit-logs | 审计日志 |
-| GET/PUT | /api/settings | LDAP 配置 |
+| POST | `/api/login` | 用户登录 |
+| POST | `/api/logout` | 退出登录 |
+| GET | `/api/me` | 获取当前用户信息 |
+
+### 业务
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST | `/api/systems` | 信息系统列表/新增 |
+| GET/PUT/DELETE | `/api/systems/:id` | 系统详情/编辑/删除 |
+| GET/POST | `/api/classifications` | 定级列表/新增 |
+| GET | `/api/classifications/:id/report` | 定级报告 (?format=html\|pdf) |
+| GET/POST | `/api/filings` | 备案列表/新增 |
+| PUT | `/api/filings/:id` | 编辑备案 |
+| GET/POST/DELETE | `/api/filings/:id/evidences` | 备案证明管理 |
+| GET | `/api/filings/:id/evidences/:eid/file` | 查看证明图片 |
+| GET | `/api/filings/years` | 备案年份列表 |
+| GET/POST | `/api/gap-analyses` | 差距分析列表/新增 |
+| GET | `/api/gap-analyses/:id` | 差距分析详情(含差距项) |
+| POST | `/api/gap-analyses/import` | Excel 导入差距项 |
+| GET/POST | `/api/rectifications` | 整改列表/新增 |
+| PUT | `/api/rectifications/:id` | 编辑整改 |
+| POST | `/api/rectifications/:id/evidences` | 上传整改截图 |
+| GET | `/api/rectifications/:id/evidences/:eid/file` | 查看截图 |
+| GET/POST | `/api/assessments` | 测评列表/新增 |
+| GET/POST | `/api/documents` | 文档列表/上传 |
+| PUT/DELETE | `/api/documents/:id` | 编辑/删除文档 |
+| GET | `/api/documents/:id/download` | 下载文档 |
+
+### 管理
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST | `/api/users` | 用户列表/新增 |
+| PUT/DELETE | `/api/users/:id` | 编辑/删除用户 |
+| POST | `/api/users/:id/reset-password` | 重置密码 |
+| GET/PUT | `/api/permissions` | 查看/修改角色权限 |
+| GET | `/api/audit-logs` | 审计日志查询 |
+| GET | `/api/audit-logs/export` | 审计日志导出 CSV |
+| GET/PUT | `/api/settings` | 系统配置管理 |
+| POST | `/api/settings/ldap/test` | LDAP 连接测试 |
+| GET | `/api/dashboard/stats` | 工作台统计数据 |
+
+## 文档
+
+详见 `docs/` 目录：
+
+- [需求文档](docs/需求文档.md) — 12 个功能模块需求规格
+- [设计文档](docs/设计文档.md) — 架构/数据库/API/安全设计
+- [运维文档](docs/运维文档.md) — 部署/备份/监控/故障排查
