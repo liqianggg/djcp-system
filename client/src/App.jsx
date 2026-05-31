@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Server, ShieldCheck, FileText, 
   AlertTriangle, Wrench, ClipboardCheck, FolderOpen,
   LogOut, User, Users, Shield, ScrollText, Settings,
-  ChevronRight
+  ChevronRight, Building2
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -14,6 +14,7 @@ import Filing from './pages/Filing';
 import GapAnalysis from './pages/GapAnalysis';
 import Rectification from './pages/Rectification';
 import Assessment from './pages/Assessment';
+import AgencyManagement from './pages/AgencyManagement';
 import Documents from './pages/Documents';
 import UserManagement from './pages/UserManagement';
 import PermissionManagement from './pages/PermissionManagement';
@@ -45,6 +46,7 @@ const iconColors = {
   permissions:   { bg: 'rgba(255,204,0,0.15)',    color: '#B38600' },
   audit:         { bg: 'rgba(60,60,67,0.1)',      color: '#48484A' },
   settings:      { bg: 'rgba(60,60,67,0.1)',      color: '#48484A' },
+  agencies:       { bg: 'rgba(0,122,255,0.1)',     color: '#007AFF' },
 };
 
 export default function App() {
@@ -123,7 +125,8 @@ export default function App() {
     { to: '/gap-analysis', icon: <AlertTriangle size={15} />, label: '差距分析', color: 'gapanalysis' },
     { to: '/rectification', icon: <Wrench size={15} />, label: '整改管理', color: 'rectification' },
     { to: '/assessment', icon: <ClipboardCheck size={15} />, label: '测评管理', color: 'assessment' },
-  ].filter(i => hasPerm({filing:'filing:view','gapanalysis':'gap:view',rectification:'rectification:view',assessment:'assessment:view'}[i.color] || true));
+    { to: '/agencies', icon: <Building2 size={15} />, label: '测评机构', color: 'agencies' },
+  ].filter(i => hasPerm({filing:'filing:view','gapanalysis':'gap:view',rectification:'rectification:view',assessment:'assessment:view',agencies:'agency:view'}[i.color] || true));
 
   const resourceItems = [
     { to: '/documents', icon: <FolderOpen size={15} />, label: '文档管理', color: 'documents' },
@@ -139,7 +142,8 @@ export default function App() {
   const permMap = {
     '/': 'dashboard:view', '/systems': 'system:view', '/classification': 'classification:view',
     '/filing': 'filing:view', '/gap-analysis': 'gap:view', '/rectification': 'rectification:view',
-    '/assessment': 'assessment:view', '/documents': 'document:view',
+    '/assessment': 'assessment:view',
+    '/agencies': 'agency:view', '/documents': 'document:view',
     '/users': 'user:view', '/permissions': 'permission:view', '/audit-log': 'audit:view',
     '/settings': 'settings:view'
   };
@@ -205,6 +209,7 @@ export default function App() {
           <Route path="/gap-analysis" element={hasPerm('gap:view') ? <GapAnalysis token={token} /> : <Navigate to="/" replace />} />
           <Route path="/rectification" element={hasPerm('rectification:view') ? <Rectification token={token} /> : <Navigate to="/" replace />} />
           <Route path="/assessment" element={hasPerm('assessment:view') ? <Assessment token={token} /> : <Navigate to="/" replace />} />
+          <Route path="/agencies" element={hasPerm('agency:view') ? <AgencyManagement token={token} /> : <Navigate to="/" replace />} />
           <Route path="/documents" element={hasPerm('document:view') ? <Documents token={token} /> : <Navigate to="/" replace />} />
           <Route path="/users" element={hasPerm('user:view') ? <UserManagement token={token} /> : <Navigate to="/" replace />} />
           <Route path="/permissions" element={hasPerm('permission:view') ? <PermissionManagement token={token} /> : <Navigate to="/" replace />} />

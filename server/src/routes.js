@@ -1001,6 +1001,103 @@ router.delete('/api/rectifications/:id/evidences/:eid', requirePermission('recti
   res.json({ success: true });
 });
 
+// ===================== 测评机构管理 =====================
+// 测评机构列表
+router.get('/api/agencies', requirePermission('agency:view'), (req, res) => {
+  const db = getDb();
+  const agencies = db.prepare('SELECT * FROM assessment_agencies ORDER BY name').all();
+  res.json(agencies);
+});
+
+// 测评机构详情（含进场记录）
+router.get('/api/agencies/:id', requirePermission('agency:view'), (req, res) => {
+  const db = getDb();
+  const agency = db.prepare('SELECT * FROM assessment_agencies WHERE id=?').get(req.params.id);
+  if (!agency) return res.status(404).json({ error: '测评机构不存在' });
+  const records = db.prepare(`SELECT r.*, u.real_name as client_contact_name, a.system_id, s.name as system_name
+    FROM on_site_records r
+    LEFT JOIN users u ON r.client_contact_id = u.id
+    LEFT JOIN assessments a ON r.assessment_id = a.id
+    LEFT JOIN systems s ON a.system_id = s.id
+    WHERE r.agency_id=? ORDER BY r.entry_date DESC`).all(req.params.id);
+  res.json({ ...agency, on_site_records: records });
+});
+
+// 创建测评机构
+router.post('/api/agencies', requirePermission('agency:create'), (req, res) => {
+  const db = getDb();
+  const { name, qualification_level, qualification_number, qualification_expiry, address, phone, email, contact_person, contact_phone, contact_email, remarks } = req.body;
+  if (!name) return res.status(400).json({ error: '机构名称不能为空' });
+  const result = db.prepare('INSERT INTO assessment_agencies (name, qualification_level, qualification_number, qualification_expiry, address, phone, email, contact_person, contact_phone, contact_email, remarks) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+    .run(name, qualification_level, qualification_number, qualification_expiry, address, phone, email, contact_person, contact_phone, contact_email, remarks);
+  auditLog(db, req.user.id, req.user.username, req.user.real_name, 'create', 'agency', 'agency', String(result.lastInsertRowid), `新增测评机构: ${name}`);
+  res.json({ id: result.lastInsertRowid, ...req.body });
+});
+
+// 编辑测评机构
+router.put('/api/agencies/:id', requirePermission('agency:edit'), (req, res) => {
+  const db = getDb();
+  const { name, qualification_level, qualification_number, qualification_expiry, address, phone, email, contact_person, contact_phone, contact_email, remarks, status } = req.body;
+  db.prepare(`UPDATE assessment_agencies SET name=?, qualification_level=?, qualification_number=?, qualification_expiry=?, address=?, phone=?, email=?, contact_person=?, contact_phone=?, contact_email=?, remarks=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+    .run(name, qualification_level, qualification_number, qualification_expiry, address, phone, email, contact_person, contact_phone, contact_email, remarks, status, req.params.id);
+  auditLog(db, req.user.id, req.user.username, req.user.real_name, 'update', 'agency', 'agency', req.params.id, `编辑测评机构: ${name}`);
+  res.json({ success: true });
+});
+
+// 删除测评机构
+router.delete('/api/agencies/:id', requirePermission('agency:delete'), (req, res) => {
+  const db = getDb();
+  const agency = db.prepare('SELECT name FROM assessment_agencies WHERE id=?').get(req.params.id);
+  if (!agency) return res.status(404).json({ error: '测评机构不存在' });
+  db.prepare('DELETE FROM assessment_agencies WHERE id=?').run(req.params.id);
+  auditLog(db, req.user.id, req.user.username, req.user.real_name, 'delete', 'agency', 'agency', req.params.id, `删除测评机构: ${agency.name}`);
+  res.json({ success: true });
+});
+
+// ===================== 进场测评记录 =====================
+// 某机构的进场记录列表
+router.get('/api/agencies/:id/records', requirePermission('onsite:view'), (req, res) => {
+  const db = getDb();
+  const records = db.prepare(`SELECT r.*, u.real_name as client_contact_name, a.system_id, s.name as system_name
+    FROM on_site_records r
+    LEFT JOIN users u ON r.client_contact_id = u.id
+    LEFT JOIN assessments a ON r.assessment_id = a.id
+    LEFT JOIN systems s ON a.system_id = s.id
+    WHERE r.agency_id=? ORDER BY r.entry_date DESC`).all(req.params.id);
+  res.json(records);
+});
+
+// 创建进场记录
+router.post('/api/agencies/:id/records', requirePermission('onsite:create'), (req, res) => {
+  const db = getDb();
+  const { assessment_id, entry_date, exit_date, assessment_personnel, client_contact_id, remarks } = req.body;
+  if (!entry_date) return res.status(400).json({ error: '进场日期不能为空' });
+  const result = db.prepare('INSERT INTO on_site_records (agency_id, assessment_id, entry_date, exit_date, assessment_personnel, client_contact_id, remarks) VALUES (?,?,?,?,?,?,?)')
+    .run(req.params.id, assessment_id || null, entry_date, exit_date, assessment_personnel, client_contact_id || null, remarks);
+  auditLog(db, req.user.id, req.user.username, req.user.real_name, 'create', 'onsite', 'agency', req.params.id, `新增进场记录`);
+  const record = db.prepare(`SELECT r.*, u.real_name as client_contact_name FROM on_site_records r LEFT JOIN users u ON r.client_contact_id = u.id WHERE r.id=?`).get(result.lastInsertRowid);
+  res.json(record);
+});
+
+// 编辑进场记录
+router.put('/api/agencies/:id/records/:rid', requirePermission('onsite:edit'), (req, res) => {
+  const db = getDb();
+  const { assessment_id, entry_date, exit_date, assessment_personnel, client_contact_id, remarks } = req.body;
+  db.prepare('UPDATE on_site_records SET assessment_id=?, entry_date=?, exit_date=?, assessment_personnel=?, client_contact_id=?, remarks=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND agency_id=?')
+    .run(assessment_id || null, entry_date, exit_date, assessment_personnel, client_contact_id || null, remarks, req.params.rid, req.params.id);
+  auditLog(db, req.user.id, req.user.username, req.user.real_name, 'update', 'onsite', 'agency', req.params.id, '更新进场记录');
+  res.json({ success: true });
+});
+
+// 删除进场记录
+router.delete('/api/agencies/:id/records/:rid', requirePermission('onsite:delete'), (req, res) => {
+  const db = getDb();
+  db.prepare('DELETE FROM on_site_records WHERE id=? AND agency_id=?').run(req.params.rid, req.params.id);
+  auditLog(db, req.user.id, req.user.username, req.user.real_name, 'delete', 'onsite', 'agency', req.params.id, '删除进场记录');
+  res.json({ success: true });
+});
+
+
 // ===================== 测评管理 =====================
 router.get('/api/assessments', requirePermission('assessment:view'), (req, res) => {
   const db = getDb();
@@ -1094,6 +1191,14 @@ router.get('/api/documents/:id/download', (req, res) => {
 });
 
 // ===================== 用户管理 =====================
+
+// 获取活跃用户列表（用于下拉选择）
+router.get('/api/users/active', requirePermission(), (req, res) => {
+  const db = getDb();
+  const users = db.prepare("SELECT id, real_name, username, department FROM users WHERE status='active' ORDER BY real_name").all();
+  res.json(users);
+});
+
 router.get('/api/users', requirePermission('user:view'), (req, res) => {
   const db = getDb();
   const users = db.prepare('SELECT id, username, real_name, role, department, phone, email, status, last_login, login_type, ldap_dn FROM users ORDER BY id').all();
