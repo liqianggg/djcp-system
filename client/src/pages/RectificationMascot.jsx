@@ -4,13 +4,14 @@ import { Bell, Clock, AlertTriangle, ChevronRight, ShieldCheck, Wrench, GripHori
 
 const API = '';
 
-// Load saved position or default to top-right
+const DEFAULT_POS = { x: 260, y: 16 };
+
 function loadPosition() {
   try {
     const saved = localStorage.getItem('djcp_mascot_pos');
     if (saved) return JSON.parse(saved);
   } catch (e) {}
-  return { x: window.innerWidth - 340, y: 20 };
+  return { ...DEFAULT_POS };
 }
 
 export default function RectificationMascot({ token }) {
@@ -26,6 +27,33 @@ export default function RectificationMascot({ token }) {
   const [pos, setPos] = useState(loadPosition);
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef({ startX: 0, startY: 0, origX: 0, origY: 0 });
+
+  // Popover direction: auto-calculated from position
+  const [popDir, setPopDir] = useState({ v: 'down', h: 'right' });
+
+  const calcPopDir = useCallback((p) => {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    return {
+      v: p.y > vh - 420 ? 'up' : 'down',
+      h: p.x > vw - 400 ? 'left' : 'right',
+    };
+  }, []);
+
+  // Reset position on window resize
+  useEffect(() => {
+    const onResize = () => {
+      setPos(p => {
+        const n = {
+          x: Math.max(0, Math.min(window.innerWidth - 400, p.x)),
+          y: Math.max(0, Math.min(window.innerHeight - 60, p.y)),
+        };
+        return n;
+      });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const load = async () => {
     try {
@@ -67,6 +95,7 @@ export default function RectificationMascot({ token }) {
   const onDragStart = useCallback((e) => {
     e.preventDefault();
     setDragging(true);
+    setOpen(false);
     dragRef.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -89,6 +118,7 @@ export default function RectificationMascot({ token }) {
       setDragging(false);
       setPos(p => {
         localStorage.setItem('djcp_mascot_pos', JSON.stringify(p));
+        setPopDir(calcPopDir(p));
         return p;
       });
     };
@@ -98,25 +128,39 @@ export default function RectificationMascot({ token }) {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [dragging]);
+  }, [dragging, calcPopDir]);
+
+  // Calc pop direction on open
+  useEffect(() => { if (open) setPopDir(calcPopDir(pos)); }, [open, pos, calcPopDir]);
 
   const total = pending.length;
   const urgent = overdue.length;
 
-  let mood, moodEmoji, moodColor, moodBg;
+  let mood, moodEmoji, moodColor;
   if (total === 0) {
-    mood = '一切正常'; moodEmoji = '🛡️'; moodColor = '#34C759'; moodBg = 'rgba(52,199,89,0.1)';
+    mood = '一切正常'; moodEmoji = '🛡️'; moodColor = '#34C759';
   } else if (urgent > 0) {
-    mood = `${urgent}项逾期`; moodEmoji = '🚨'; moodColor = '#FF3B30'; moodBg = 'rgba(255,59,48,0.1)';
+    mood = `${urgent}项逾期`; moodEmoji = '🚨'; moodColor = '#FF3B30';
   } else if (total <= 3) {
-    mood = `${total}项待处理`; moodEmoji = '🤔'; moodColor = '#FF9500'; moodBg = 'rgba(255,149,0,0.1)';
+    mood = `${total}项待处理`; moodEmoji = '🤔'; moodColor = '#FF9500';
   } else {
-    mood = `${total}项待处理`; moodEmoji = '😰'; moodColor = '#FF3B30'; moodBg = 'rgba(255,59,48,0.1)';
+    mood = `${total}项待处理`; moodEmoji = '😰'; moodColor = '#FF3B30';
   }
 
   const PRIORITY_MAP = { urgent: '紧急', high: '高', medium: '中', low: '低' };
   const PRIORITY_COLOR = { urgent: '#FF3B30', high: '#FF9500', medium: '#007AFF', low: '#8E8E93' };
   const goRect = () => { navigate('/rectification'); setOpen(false); };
+
+  const isUp = popDir.v === 'up';
+  const isLeft = popDir.h === 'left';
+
+  // Dynamic border-radius for seamless button→popover connection
+  const btnRadius = open
+    ? (isUp ? '0 0 14px 14px' : '14px 14px 0 0')
+    : '22px';
+  const popRadius = isUp ? '14px 14px 0 0' : '0 0 14px 14px';
+  const popBorder = isUp ? 'none' : '1px solid rgba(60,60,67,0.12)';
+  const popBorderBt = isUp ? '1px solid rgba(60,60,67,0.12)' : 'none';
 
   return (
     <div ref={ref} style={{
@@ -125,23 +169,19 @@ export default function RectificationMascot({ token }) {
       left: pos.x,
       zIndex: 1000,
       userSelect: 'none',
-      transition: dragging ? 'none' : 'top 0.3s ease, left 0.3s ease',
     }}>
-      {/* Collapsed bubble */}
+      {/* Collapsed bubble when there are pending and not open */}
       {!open && total > 0 && (
         <button
           onClick={() => setOpen(true)}
           onMouseDown={onDragStart}
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
+            display: 'flex', alignItems: 'center', gap: '6px',
             background: '#FFFFFF',
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
             border: '1px solid rgba(60,60,67,0.12)',
-            borderRadius: '22px',
-            padding: '6px 14px',
+            borderRadius: '22px', padding: '6px 14px',
             cursor: dragging ? 'grabbing' : 'grab',
             boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
             animation: bounce ? 'mascotBounce 0.6s ease' : 'none',
@@ -155,7 +195,7 @@ export default function RectificationMascot({ token }) {
             background: moodColor, color: '#fff', fontSize: '12px', fontWeight: 700,
             display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 6px',
           }}>{total}</span>
-          <GripHorizontal size={10} color="var(--text-tertiary)" style={{ marginLeft: '2px' }} />
+          <GripHorizontal size={10} color="var(--text-tertiary)" style={{ marginLeft: '2px', opacity: 0.5 }} />
         </button>
       )}
 
@@ -164,19 +204,17 @@ export default function RectificationMascot({ token }) {
         <button
           onClick={() => setOpen(!open)}
           onMouseDown={onDragStart}
-          title={dragging ? '拖动中...' : `整改助手 · ${mood} (可拖动)`}
+          title={dragging ? '拖动中...' : '整改助手 · 可拖动'}
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: open ? '#FFFFFF' : '#FFFFFF',
+            display: 'flex', alignItems: 'center', gap: '8px',
+            background: '#FFFFFF',
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
             border: '1px solid rgba(60,60,67,0.12)',
-            borderRadius: open ? '14px 14px 0 0' : '22px',
+            borderRadius: btnRadius,
             padding: '7px 14px',
             cursor: dragging ? 'grabbing' : 'grab',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+            boxShadow: open ? '0 2px 12px rgba(0,0,0,0.06)' : '0 2px 12px rgba(0,0,0,0.08)',
             outline: 'none',
             animation: bounce && !open ? 'mascotBounce 0.6s ease' : 'none',
           }}
@@ -184,7 +222,7 @@ export default function RectificationMascot({ token }) {
             if (!dragging) e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)';
           }}
           onMouseLeave={e => {
-            if (!dragging) e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.06)';
+            if (!dragging) e.currentTarget.style.boxShadow = open ? '0 2px 12px rgba(0,0,0,0.06)' : '0 2px 12px rgba(0,0,0,0.08)';
           }}
         >
           <span style={{
@@ -211,23 +249,27 @@ export default function RectificationMascot({ token }) {
         </button>
       )}
 
-      {/* Popover — downward */}
+      {/* Popover — smart direction */}
       {open && (
         <div style={{
           position: 'absolute',
-          top: '100%',
-          left: '0',
+          ...(isUp
+            ? { bottom: '100%', top: 'auto' }
+            : { top: '100%', bottom: 'auto' }),
+          ...(isLeft
+            ? { right: '0', left: 'auto' }
+            : { left: '0', right: 'auto' }),
           width: '380px',
           maxHeight: '480px',
           background: '#FFFFFF',
           backdropFilter: 'blur(30px)',
           WebkitBackdropFilter: 'blur(30px)',
-          borderRadius: '0 0 14px 14px',
-          border: '1px solid rgba(60,60,67,0.12)',
-          borderTop: 'none',
+          borderRadius: popRadius,
+          border: popBorder,
+          borderTop: popBorderBt,
           boxShadow: '0 8px 40px rgba(0,0,0,0.12)',
           overflow: 'hidden',
-          animation: 'popoverDown 0.2s ease-out',
+          animation: isUp ? 'popoverUp 0.2s ease-out' : 'popoverDown 0.2s ease-out',
         }}>
           <div style={{ overflowY: 'auto', maxHeight: '400px', padding: '8px 12px' }}>
             {total === 0 ? (
