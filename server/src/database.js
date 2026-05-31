@@ -49,7 +49,7 @@ function initTables() {
 function initPermissions() {
   const count = db.prepare('SELECT COUNT(*) as cnt FROM permissions').get();
   if (count.cnt > 0) return;
-  const stmt = db.prepare('INSERT INTO permissions (code, name, module, description) VALUES (?,?,?,?)');
+  const stmt = db.prepare('INSERT OR IGNORE INTO permissions (code, name, module, description) VALUES (?,?,?,?)');
   const perms = [
     ['dashboard:view','查看仪表盘','dashboard','查看工作台统计概览'],
     ['system:view','查看信息系统','system','查看信息系统列表和详情'],
@@ -105,7 +105,7 @@ function initRolePermissions() {
   if (count.cnt > 0) return;
 
   const allPerms = db.prepare('SELECT code FROM permissions').all().map(p => p.code);
-  const rpStmt = db.prepare('INSERT INTO role_permissions (role, permission_code) VALUES (?,?)');
+  const rpStmt = db.prepare('INSERT OR IGNORE INTO role_permissions (role, permission_code) VALUES (?,?)');
 
   // 系统管理员：所有权限
   for (const code of allPerms) rpStmt.run('system_admin', code);
