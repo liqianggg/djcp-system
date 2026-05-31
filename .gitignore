@@ -10,3 +10,6 @@ uploads/
 test-reports/
 /tmp/
 .idea/
+
+.playwright-cli/
+pet-run/
