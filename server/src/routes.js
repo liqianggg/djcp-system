@@ -346,39 +346,50 @@ router.post('/api/gap-analyses/import', requirePermission('gap:create'), upload.
 
 // ===================== 认证 =====================
 router.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, login_type } = req.body;
   if (!username || !password) return res.status(400).json({ success: false, message: '请输入用户名和密码' });
 
   const db = getDb();
-  const user = db.prepare('SELECT * FROM users WHERE username=?').get(username);
+  let user = db.prepare('SELECT * FROM users WHERE username=?').get(username);
+  const isLdapRequest = login_type === 'ldap' || (user && user.login_type === 'ldap');
 
-  if (!user) {
-    auditLog(db, null, username, null, 'login', 'auth', 'user', null, '登录失败：用户名或密码错误', 'failure');
-    return res.status(401).json({ success: false, message: '用户名或密码错误' });
-  }
-
-  // LDAP/域控账户登录
-  if (user.login_type === 'ldap') {
+  // 域控登录
+  if (isLdapRequest) {
+    // 检查域控是否启用
     const ldapEnabled = db.prepare("SELECT value FROM settings WHERE key='ldap_enabled'").get();
     if (!ldapEnabled || ldapEnabled.value !== 'true') {
-      return res.status(400).json({ success: false, message: '域控登录未启用，请联系管理员' });
+      return res.status(400).json({ success: false, message: '域控登录未启用，请联系系统管理员' });
     }
     const ldapSettings = {};
     const rows = db.prepare("SELECT key, value FROM settings WHERE key LIKE 'ldap_%'").all();
     for (const r of rows) ldapSettings[r.key] = r.value;
     
     if (!ldapSettings.ldap_server) {
-      return res.status(400).json({ success: false, message: '域控服务器未配置' });
+      return res.status(400).json({ success: false, message: '域控服务器未配置，请联系系统管理员' });
     }
     
+    // 尝试域控认证
     try {
       await ldapAuthenticate(username, password, ldapSettings);
     } catch (e) {
-      auditLog(db, null, username, null, 'login', 'auth', 'user', null, e.message, 'failure');
+      auditLog(db, null, username, null, 'login', 'auth', 'user', null, '域控认证失败: ' + e.message, 'failure');
       return res.status(401).json({ success: false, message: e.message });
+    }
+
+    // 域控认证成功，如用户不存在则自动创建
+    if (!user) {
+      const defaultPassword = bcrypt.hashSync('Djcp@2026', 10);
+      db.prepare('INSERT INTO users (username, password, real_name, role, department, login_type, status) VALUES (?,?,?,?,?,?,?)')
+        .run(username, defaultPassword, username, 'viewer', '', 'ldap', 'active');
+      user = db.prepare('SELECT * FROM users WHERE username=?').get(username);
+      auditLog(db, user.id, username, user.real_name, 'user_create', 'auth', 'user', String(user.id), '域控用户自动创建');
     }
   } else {
     // 本地密码认证
+    if (!user) {
+      auditLog(db, null, username, null, 'login', 'auth', 'user', null, '登录失败：用户名或密码错误', 'failure');
+      return res.status(401).json({ success: false, message: '用户名或密码错误' });
+    }
     if (!bcrypt.compareSync(password, user.password)) {
       auditLog(db, null, username, null, 'login', 'auth', 'user', null, '登录失败：用户名或密码错误', 'failure');
       return res.status(401).json({ success: false, message: '用户名或密码错误' });

@@ -65,11 +65,11 @@ export default function App() {
     setLoading(false);
   }, []);
 
-  const handleLogin = async (username, password) => {
+  const handleLogin = async (username, password, loginType) => {
     const res = await fetch(API + '/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ username, password, login_type: loginType || 'local' })
     });
     const data = await res.json();
     if (data.success) {
@@ -227,11 +227,12 @@ function LoginPage({ onLogin }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [ldapMode, setLdapMode] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true); setError('');
-    const result = await onLogin(username, password);
+    const result = await onLogin(username, password, ldapMode ? 'ldap' : 'local');
     if (!result.success) setError(result.message || '登录失败');
     setLoading(false);
   };
@@ -278,6 +279,10 @@ function LoginPage({ onLogin }) {
           <div style={{marginBottom:error?14:24}}>
             <label style={{display:'block',fontSize:12,fontWeight:500,color:'rgba(0,200,255,.6)',marginBottom:6,letterSpacing:'.05em',textTransform:'uppercase'}}>Password</label>
             <input type="password" style={is} value={password} onChange={e=>setPassword(e.target.value)} placeholder="请输入密码" onFocus={e=>Object.assign(e.target.style,fs)} onBlur={e=>Object.assign(e.target.style,is)}/>
+          </div>
+          <div style={{marginBottom:18,display:'flex',alignItems:'center',gap:8}}>
+            <input type="checkbox" id="ldapMode" checked={ldapMode} onChange={e=>setLdapMode(e.target.checked)} style={{accentColor:'#0cf',width:16,height:16,cursor:'pointer'}} />
+            <label htmlFor="ldapMode" style={{fontSize:13,color:'rgba(0,200,255,.7)',cursor:'pointer',userSelect:'none'}}>域控登录 (LDAP/AD)</label>
           </div>
           {error&&<p style={{color:'#ff4466',fontSize:13,marginBottom:16,textAlign:'center'}}>{error}</p>}
           <button type="submit" disabled={loading} style={{width:'100%',padding:12,background:loading?'rgba(0,100,200,.3)':'linear-gradient(135deg,#06f,#0af)',color:'#fff',border:'none',borderRadius:8,fontSize:15,fontWeight:600,cursor:loading?'not-allowed':'pointer',letterSpacing:'.04em',boxShadow:loading?'none':'0 0 20px rgba(0,100,255,.4)',transition:'all .3s ease',fontFamily:'inherit'}}>{loading?'登录中...':'登 录'}</button>
