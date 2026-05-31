@@ -1,4 +1,4 @@
-# 等保测评全生命周期管理系统 v1.0
+# 等保测评全生命周期管理系统 v1.1
 
 网络安全等级保护（DJCP）管理平台，覆盖信息系统定级、备案、差距分析、整改、测评的全生命周期。采用三权分立权限模型，仿 Apple 风格 UI。
 
@@ -82,8 +82,16 @@ cd ../server && npm start
 
 ### 测评管理
 - 测评类型：initial / reassessment / annual
+- 测评机构从机构库下拉选择，自动关联
 - 逐项评分：符合 / 部分符合 / 不符合 / 不适用
 - 结论：pass / fail / conditional_pass
+
+### 测评机构管理
+- 机构库维护：名称、资质等级、资质编号及有效期、联系方式
+- 机构对接人信息管理（姓名/电话/邮箱）
+- 进场测评记录管理：进出场日期、测评人员、甲方对接人
+- 机构与进场记录关联查询
+- 增删改查 + 搜索筛选
 
 ### 文档管理
 - 6 种文档类型：policy / procedure / record / report / evidence / other
@@ -141,6 +149,7 @@ djcp-system/
 │           ├── GapAnalysis.jsx        # 差距分析 + Excel导入
 │           ├── Rectification.jsx      # 整改管理 + 截图上传
 │           ├── Assessment.jsx         # 测评管理
+│           ├── AgencyManagement.jsx   # 测评机构管理 + 进场记录
 │           ├── Documents.jsx          # 文档管理
 │           ├── UserManagement.jsx     # 用户管理
 │           ├── PermissionManagement.jsx # 权限管理
@@ -181,6 +190,11 @@ djcp-system/
 | POST | `/api/rectifications/:id/evidences` | 上传整改截图 |
 | GET | `/api/rectifications/:id/evidences/:eid/file` | 查看截图 |
 | GET/POST | `/api/assessments` | 测评列表/新增 |
+| GET/POST | `/api/agencies` | 测评机构列表/新增 |
+| PUT/DELETE | `/api/agencies/:id` | 编辑/删除机构 |
+| GET | `/api/agencies/:id/records` | 机构进场记录列表 |
+| POST | `/api/agencies/:id/records` | 新增进场记录 |
+| PUT/DELETE | `/api/agencies/:id/records/:rid` | 编辑/删除进场记录 |
 | GET/POST | `/api/documents` | 文档列表/上传 |
 | PUT/DELETE | `/api/documents/:id` | 编辑/删除文档 |
 | GET | `/api/documents/:id/download` | 下载文档 |
