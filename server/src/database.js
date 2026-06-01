@@ -126,6 +126,9 @@ async function initDb() {
   try { db.run("ALTER TABLE assessments ADD COLUMN agency_id INTEGER REFERENCES assessment_agencies(id)"); } catch (_) {}
   try { db.run("ALTER TABLE users ADD COLUMN login_type TEXT DEFAULT 'local'"); } catch (_) {}
   try { db.run("ALTER TABLE users ADD COLUMN last_login DATETIME"); } catch (_) {}
+  try { db.run("ALTER TABLE users ADD COLUMN phone TEXT"); } catch (_) {}
+  try { db.run("ALTER TABLE users ADD COLUMN email TEXT"); } catch (_) {}
+  try { db.run("ALTER TABLE users ADD COLUMN ldap_dn TEXT"); } catch (_) {}
 
   // Save after initialization
   const data = db.export();
@@ -158,7 +161,7 @@ function initTables(w) {
     CREATE TABLE IF NOT EXISTS on_site_records (id INTEGER PRIMARY KEY AUTOINCREMENT, agency_id INTEGER NOT NULL REFERENCES assessment_agencies(id) ON DELETE CASCADE, assessment_id INTEGER REFERENCES assessments(id) ON DELETE SET NULL, entry_date DATE NOT NULL, exit_date DATE, assessment_personnel TEXT, client_contact_id INTEGER REFERENCES users(id), remarks TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE IF NOT EXISTS assessment_items (id INTEGER PRIMARY KEY AUTOINCREMENT, assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE, category TEXT, control_id TEXT, control_desc TEXT, score REAL DEFAULT 0, max_score REAL DEFAULT 5, result TEXT CHECK(result IN ('符合','部分符合','不符合','不适用')), remarks TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE IF NOT EXISTS documents (id INTEGER PRIMARY KEY AUTOINCREMENT, system_id INTEGER REFERENCES systems(id) ON DELETE SET NULL, title TEXT, doc_type TEXT CHECK(doc_type IN ('policy','procedure','record','report','evidence','other')), file_path TEXT, file_size INTEGER, version TEXT, description TEXT, status TEXT DEFAULT 'active', uploaded_by TEXT, uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP);
-    CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password TEXT, real_name TEXT, role TEXT CHECK(role IN ('system_admin','security_admin','security_auditor','operator','viewer')), department TEXT, status TEXT CHECK(status IN ('active','disabled')) DEFAULT 'active', login_type TEXT DEFAULT 'local', last_login DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+    CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password TEXT, real_name TEXT, role TEXT CHECK(role IN ('system_admin','security_admin','security_auditor','operator','viewer')), department TEXT, phone TEXT, email TEXT, status TEXT CHECK(status IN ('active','disabled')) DEFAULT 'active', login_type TEXT DEFAULT 'local', ldap_dn TEXT, last_login DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, token TEXT NOT NULL, expires_at DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE IF NOT EXISTS permissions (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE NOT NULL, name TEXT, module TEXT, description TEXT);
     CREATE TABLE IF NOT EXISTS role_permissions (id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT NOT NULL, permission_code TEXT NOT NULL, UNIQUE(role, permission_code));
