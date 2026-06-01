@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const routes = require('./routes');
+const { initDb } = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -56,6 +57,12 @@ app.get('/*splat', (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`DJCP 等保测评管理系统服务已启动: http://localhost:${PORT}`);
+// 初始化数据库后启动服务
+initDb().then(() => {
+  app.listen(PORT, () => {
+    console.log(`DJCP 等保测评管理系统服务已启动: http://localhost:${PORT}`);
+  });
+}).catch(err => {
+  console.error('数据库初始化失败:', err);
+  process.exit(1);
 });
