@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, FileText, Info, Download, Eye } from 'lucide-react';
-import { apiGet, apiPost, hasPermission } from '../api';
+import { apiGet, apiPost, hasPermission, fetchBlobUrl, fetchDownload } from '../api';
 import { PageShell, EmptyState, Modal } from '../components';
+import { useToast } from '../hooks/useToast';
 
 const LEVEL_LABELS = { 1: '自主保护级', 2: '指导保护级', 3: '监督保护级', 4: '强制保护级', 5: '专控保护级' };
 
@@ -9,22 +10,33 @@ export default function Classification() {
   const [systems, setSystems] = useState([]);
   const [classifications, setClassifications] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const toast = useToast();
   const [showGuide, setShowGuide] = useState(false);
   const [exportFormat, setExportFormat] = useState('html');
-  const [form, setForm] = useState({ system_id: '', business_impact_level: 2, service_scope: '', business_dependency: '', classification_report: '', classified_by: '' });
+  const [users, setUsers] = useState([]);
+  const [form, setForm] = useState({ system_id: '', business_impact_level: 2, service_scope: '', business_dependency: '', classification_report: '', classified_by: '', classified_by_id: '' });
 
   const load = () => {
     apiGet('/api/systems').then(setSystems);
     apiGet('/api/classifications').then(setClassifications);
+    apiGet('/api/users/active').then(setUsers);
   };
   useEffect(load, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await apiPost('/api/classifications', form);
-    setShowModal(false);
-    setForm({ system_id: '', business_impact_level: 2, service_scope: '', business_dependency: '', classification_report: '', classified_by: '' });
-    load();
+    setSubmitting(true);
+    try {
+      await apiPost('/api/classifications', form);
+      setShowModal(false);
+      toast.success('定级记录已创建');
+      load();
+    } catch (err) {
+      toast.error(err.message || '提交失败');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -119,23 +131,28 @@ export default function Classification() {
                   </td>
                   <td style={{ color:'var(--text-secondary)', maxWidth:'200px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.service_scope || '-'}</td>
                   <td style={{ color:'var(--text-secondary)', maxWidth:'200px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.business_dependency || '-'}</td>
-                  <td>{c.classified_by || '-'}</td>
+                  <td>{c.classified_by_name || c.classified_by || '-'}</td>
                   <td style={{ fontSize:'12px', color:'var(--text-secondary)' }}>{c.classified_at || '-'}</td>
                   <td>
                     <div className="toolbar">
-                      <a href={"/api/classifications/"+c.id+"/report?token="+localStorage.getItem("djcp_token")} target="_blank" className="btn btn-sm" style={{ textDecoration:'none' }} title="查看报告">
+                      <button className="btn btn-sm" onClick={async () => {
+                        const url = await fetchBlobUrl('/api/classifications/'+c.id+'/report');
+                        window.open(url, '_blank');
+                      }} title="查看报告">
                         <Eye size={13} /> 查看
-                      </a>
-                      <a
-                        href={"/api/classifications/"+c.id+"/report?format="+exportFormat+"&token="+localStorage.getItem("djcp_token")}
-                        target={exportFormat === 'pdf' ? '_blank' : undefined}
-                        download={exportFormat === 'html' ? '定级报告-'+c.system_name+'.html' : undefined}
-                        className="btn btn-sm"
-                        style={{ textDecoration:'none' }}
-                        title={"导出为 "+exportFormat.toUpperCase()}
-                      >
+                      </button>
+                      <button className="btn btn-sm" onClick={async () => {
+                        const suf = exportFormat === 'pdf' ? 'pdf' : 'html';
+                        const url = '/api/classifications/'+c.id+'/report?format='+suf;
+                        if (exportFormat === 'pdf') {
+                          const u = await fetchBlobUrl(url);
+                          window.open(u, '_blank');
+                        } else {
+                          await fetchDownload(url, '定级报告-'+c.system_name+'.html');
+                        }
+                      }} title={"导出为 "+exportFormat.toUpperCase()}>
                         <Download size={13} /> 导出
-                      </a>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -148,7 +165,7 @@ export default function Classification() {
       <Modal
         open={showModal} onClose={() => setShowModal(false)}
         title="新建系统定级"
-        footer={<><button className="btn" onClick={() => setShowModal(false)}>取消</button><button className="btn btn-primary" onClick={handleSubmit}>提交定级</button></>}
+        footer={<><button className="btn" onClick={() => setShowModal(false)} disabled={submitting}>取消</button><button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>{submitting ? '提交中...' : '提交定级'}</button></>}
       >
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -165,7 +182,17 @@ export default function Classification() {
                 {[1,2,3,4,5].map(l => <option key={l} value={l}>第{l}级 - {LEVEL_LABELS[l]}</option>)}
               </select>
             </div>
-            <div className="form-group"><label>定级人 *</label><input className="form-control" required value={form.classified_by} onChange={e => setForm({...form, classified_by:e.target.value})} /></div>
+            <div className="form-group">
+              <label>定级人 *</label>
+              <select className="form-control" required value={form.classified_by_id || ''} onChange={e => {
+                const uid = e.target.value;
+                const user = users.find(u => String(u.id) === uid);
+                setForm({...form, classified_by_id: uid ? parseInt(uid) : '', classified_by: user ? user.real_name : ''});
+              }}>
+                <option value="">请选择定级人</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.real_name} ({u.department || u.username})</option>)}
+              </select>
+            </div>
           </div>
           <div className="form-group"><label>服务范围</label><textarea className="form-control" value={form.service_scope} onChange={e => setForm({...form, service_scope:e.target.value})} rows={2} /></div>
           <div className="form-group"><label>业务依赖描述</label><textarea className="form-control" value={form.business_dependency} onChange={e => setForm({...form, business_dependency:e.target.value})} rows={2} /></div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
-import { apiGet, hasPermission } from '../api';
+import { apiGet, hasPermission, fetchDownload } from '../api';
 import { PageShell, Toolbar } from '../components';
 
 const ACTION_LABELS = {
@@ -32,7 +32,7 @@ export default function AuditLog() {
   useEffect(loadLogs, [page, filters]);
 
   const handleExport = () => {
-    window.open('/api/audit-logs/export?token=' + encodeURIComponent(localStorage.getItem('djcp_token')), '_blank');
+    fetchDownload('/api/audit-logs/export', 'audit-logs.csv');
   };
 
   const totalPages = Math.ceil(total / pageSize);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search } from 'lucide-react';
 
 // ============================================================
@@ -198,4 +198,70 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
       </div>
     </div>
   );
+}
+
+// ============================================================
+//  Skeleton — 骨架屏加载占位
+// ============================================================
+export function SkeletonTable({ rows = 5, cols = 4 }) {
+  return (
+    <div style={{ padding: '8px' }}>
+      {Array.from({ length: rows }).map((_, ri) => (
+        <div key={ri} style={{
+          display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '16px',
+          padding: '12px 16px', borderBottom: '1px solid var(--separator)'
+        }}>
+          {Array.from({ length: cols }).map((_, ci) => (
+            <div key={ci} className="skeleton-bar" style={{
+              height: '14px', borderRadius: '4px', width: `${60 + Math.random() * 30}%`
+            }} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function SkeletonCard({ lines = 4 }) {
+  return (
+    <div className="card">
+      <div className="card-body">
+        {Array.from({ length: lines }).map((_, i) => (
+          <div key={i} className="skeleton-bar" style={{
+            height: `${i === 0 ? 18 : 14}px`, borderRadius: '4px',
+            width: `${i === 0 ? 35 : 60 + Math.random() * 35}%`,
+            marginBottom: '14px'
+          }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+//  AuthImage — 通过 Authorization header 加载图片，避免 token 暴露在 URL
+// ============================================================
+export function AuthImage({ url, className, style, onClick, alt }) {
+  const [blobUrl, setBlobUrl] = useState(null);
+
+  useEffect(() => {
+    let revoked = false;
+    const token = localStorage.getItem('djcp_token');
+    fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(res => {
+        if (res.status === 401) { localStorage.clear(); window.location.reload(); return null; }
+        return res.blob();
+      })
+      .then(blob => {
+        if (blob && !revoked) setBlobUrl(URL.createObjectURL(blob));
+      })
+      .catch(() => {});
+    return () => {
+      revoked = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [url]);
+
+  if (!blobUrl) return null;
+  return <img src={blobUrl} className={className} style={style} onClick={onClick} alt={alt || ''} />;
 }

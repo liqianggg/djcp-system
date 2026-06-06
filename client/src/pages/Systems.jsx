@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Eye, ArrowLeft, Server } from 'lucide-react';
+import { Plus, Edit2, Trash2, Eye, ArrowLeft, Server, ChevronLeft, ChevronRight, XSquare } from 'lucide-react';
 import { apiGet, apiPost, apiPut, apiDelete, hasPermission } from '../api';
-import { PageShell, Toolbar, FilterSelect, EmptyState, Modal, DetailGrid } from '../components';
+import { PageShell, Toolbar, FilterSelect, EmptyState, Modal, DetailGrid, ConfirmDialog } from '../components';
+import { useToast } from '../hooks/useToast';
 
 const STATUS_LABELS = { draft: '草稿', classified: '已定级', filed: '已备案', assessing: '测评中', rectifying: '整改中', completed: '已完成' };
 const STATUS_CLASS = { draft: 'badge-gray', classified: 'badge-blue', filed: 'badge-blue', assessing: 'badge-yellow', rectifying: 'badge-yellow', completed: 'badge-green' };
@@ -17,29 +18,93 @@ export default function Systems() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [detail, setDetail] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const pageSize = 15;
+  const toast = useToast();
 
   const loadSystems = () => {
     const params = new URLSearchParams();
     if (search) params.set('search', search);
     if (filterStatus) params.set('status', filterStatus);
-    apiGet('/api/systems?' + params).then(setSystems);
+    params.set('page', page);
+    params.set('page_size', pageSize);
+    apiGet('/api/systems?' + params).then(res => {
+      if (res && Array.isArray(res.data)) {
+        setSystems(res.data);
+        setTotal(res.total || 0);
+      } else if (Array.isArray(res)) {
+        setSystems(res);
+        setTotal(res.length);
+      }
+    });
   };
 
-  useEffect(loadSystems, [search, filterStatus]);
+  useEffect(() => { setPage(1); }, [search, filterStatus]);
+  useEffect(loadSystems, [search, filterStatus, page]);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setShowModal(true); };
   const openEdit = (s) => { setEditing(s); setForm({ name:s.name, code:s.code, department:s.department, category:s.category, description:s.description, security_level:s.security_level, status:s.status }); setShowModal(true); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    editing ? await apiPut('/api/systems/'+editing.id, form) : await apiPost('/api/systems', form);
-    setShowModal(false); setEditing(null); loadSystems();
+    setSubmitting(true);
+    try {
+      editing ? await apiPut('/api/systems/'+editing.id, form) : await apiPost('/api/systems', form);
+      setShowModal(false); setEditing(null);
+      toast.success(editing ? '系统已更新' : '系统已创建');
+      loadSystems();
+    } catch (err) {
+      toast.error(err.message || '操作失败');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('确定删除？')) return;
-    await apiDelete('/api/systems/' + id);
-    loadSystems();
+  const handleDelete = async () => {
+    try {
+      await apiDelete('/api/systems/' + deleteTarget);
+      toast.success('系统已删除');
+      loadSystems();
+    } catch (err) {
+      toast.error(err.message || '删除失败');
+    }
+    setDeleteTarget(null);
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    try {
+      await fetch('/api/systems/batch', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('djcp_token')}` },
+        body: JSON.stringify({ ids: [...selectedIds] })
+      }).then(r => r.json());
+      toast.success(`已删除 ${selectedIds.size} 个系统`);
+      setSelectedIds(new Set());
+      loadSystems();
+    } catch (err) {
+      toast.error('批量删除失败');
+    }
+  };
+
+  const toggleSelect = (id) => {
+    const next = new Set(selectedIds);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setSelectedIds(next);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === systems.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(systems.map(s => s.id)));
+    }
   };
 
   if (detail) return <SystemDetail system={detail} onBack={() => { setDetail(null); loadSystems(); }} />;
@@ -49,7 +114,12 @@ export default function Systems() {
   return (
     <PageShell
       title="信息系统"
-      actions={hasPermission('system:create') && <button className="btn btn-primary" onClick={openCreate}><Plus size={15} /> 新建系统</button>}
+      actions={<>
+        {hasPermission('system:delete') && selectedIds.size > 0 && (
+          <button className="btn btn-danger" onClick={handleBatchDelete}><XSquare size={15} /> 删除选中 ({selectedIds.size})</button>
+        )}
+        {hasPermission('system:create') && <button className="btn btn-primary" onClick={openCreate}><Plus size={15} /> 新建系统</button>}
+      </>}
     >
       <Toolbar
         searchPlaceholder="搜索名称、编号或部门..."
@@ -58,19 +128,21 @@ export default function Systems() {
         filters={<FilterSelect value={filterStatus} onChange={setFilterStatus} options={statusOptions} placeholder="全部状态" />}
       />
 
-      <div className="card">
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
         <div className="table-wrapper">
           <table>
             <thead>
               <tr>
+                <th style={{ width:'30px' }}><input type="checkbox" checked={systems.length > 0 && selectedIds.size === systems.length} onChange={toggleSelectAll} style={{ accentColor:'var(--primary)' }} /></th>
                 <th>编号</th><th>名称</th><th>部门</th><th>等级</th><th>类别</th><th>状态</th><th>定级</th><th>整改</th><th style={{ width:'100px' }}>操作</th>
               </tr>
             </thead>
             <tbody>
               {systems.length === 0 ? (
-                <tr><td colSpan={9}><EmptyState icon={<Server size={32} />} title="暂无信息系统" description="点击右上角「新建系统」添加" /></td></tr>
+                <tr><td colSpan={10}><EmptyState icon={<Server size={32} />} title="暂无信息系统" description="点击右上角「新建系统」添加" /></td></tr>
               ) : systems.map(s => (
                 <tr key={s.id}>
+                  <td><input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => toggleSelect(s.id)} style={{ accentColor:'var(--primary)' }} /></td>
                   <td><code style={{ fontSize:'12px', color:'var(--text-secondary)' }}>{s.code || '-'}</code></td>
                   <td><strong style={{ cursor:'pointer' }} onClick={() => apiGet('/api/systems/'+s.id).then(setDetail)}>{s.name}</strong></td>
                   <td style={{ color:'var(--text-secondary)' }}>{s.department || '-'}</td>
@@ -83,7 +155,7 @@ export default function Systems() {
                     <div className="toolbar">
                       <button className="btn btn-sm" onClick={() => apiGet('/api/systems/'+s.id).then(setDetail)}><Eye size={13} /></button>
                       {hasPermission('system:edit') && <button className="btn btn-sm" onClick={() => openEdit(s)}><Edit2 size={13} /></button>}
-                      {hasPermission('system:delete') && <button className="btn btn-sm btn-danger" onClick={() => handleDelete(s.id)}><Trash2 size={13} /></button>}
+                      {hasPermission('system:delete') && <button className="btn btn-sm btn-danger" onClick={() => setDeleteTarget(s.id)}><Trash2 size={13} /></button>}
                     </div>
                   </td>
                 </tr>
@@ -91,6 +163,16 @@ export default function Systems() {
             </tbody>
           </table>
         </div>
+        {totalPages > 1 && (
+          <div style={{ padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--separator)' }}>
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>共 {total} 条记录</span>
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+              <button className="btn btn-sm" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></button>
+              <span style={{ fontSize: '13px', padding: '0 8px' }}>{page} / {totalPages}</span>
+              <button className="btn btn-sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Modal
@@ -100,8 +182,8 @@ export default function Systems() {
         width="560px"
         footer={
           <>
-            <button className="btn" onClick={() => setShowModal(false)}>取消</button>
-            <button className="btn btn-primary" onClick={handleSubmit}>{editing ? '保存' : '创建'}</button>
+            <button className="btn" onClick={() => setShowModal(false)} disabled={submitting}>取消</button>
+            <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>{submitting ? '保存中...' : (editing ? '保存' : '创建')}</button>
           </>
         }
       >
@@ -131,6 +213,16 @@ export default function Systems() {
           <div className="form-group"><label>系统描述</label><textarea className="form-control" value={form.description} onChange={e => setForm({...form, description:e.target.value})} rows={3} /></div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="删除信息系统"
+        message="确定要删除该系统吗？此操作不可撤销，关联数据将一并删除。"
+        confirmText="删除"
+        danger
+      />
     </PageShell>
   );
 }

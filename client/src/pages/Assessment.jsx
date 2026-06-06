@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Eye } from 'lucide-react';
+import { Plus, Eye, Download } from 'lucide-react';
 
-import { apiGet, apiPost, apiPut, apiDelete, apiUpload, hasPermission } from '../api';
+import { apiGet, apiPost, apiPut, apiDelete, apiUpload, hasPermission, fetchBlobUrl } from '../api';
 
 const TYPE_LABELS = { initial: '初次测评', reassessment: '复评', annual: '年度测评' };
 const CONC_LABELS = { pass: '通过', conditional_pass: '有条件通过', fail: '未通过' };
@@ -204,7 +204,16 @@ export default function Assessment() {
                     <td><span className="badge badge-blue">{a.overall_level || '-'}</span></td>
                     <td><span className={`badge ${CONC_COLORS[a.conclusion]}`}>{CONC_LABELS[a.conclusion]}</span></td>
                     <td><span className="badge badge-blue">{a.status === 'completed' ? '已完成' : a.status === 'in_progress' ? '进行中' : '计划中'}</span></td>
-                    <td><button className="btn btn-sm" onClick={() => handleView(a.id)}><Eye size={14} /> 查看</button></td>
+                    <td><div className="toolbar">
+                      <button className="btn btn-sm" onClick={() => handleView(a.id)}><Eye size={14} /> 查看</button>
+                      <button className="btn btn-sm" onClick={async () => {
+                        const u = await fetchBlobUrl('/api/assessments/'+a.id+'/report');
+                        const aEl = document.createElement('a');
+                        aEl.href = u; aEl.download = '测评报告-'+a.system_name+'.pdf';
+                        document.body.appendChild(aEl); aEl.click();
+                        document.body.removeChild(aEl);
+                      }} title="导出PDF"><Download size={13} /></button>
+                    </div></td>
                   </tr>
                 ))}
               </tbody>

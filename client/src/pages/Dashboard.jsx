@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Server, ShieldCheck, ClipboardCheck, Wrench, FolderOpen, AlertTriangle } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { apiGet } from '../api';
+import { SkeletonCard, SkeletonTable } from '../components';
 
 const LEVEL_COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#f97316', '#ef4444'];
 const STATUS_COLORS = { draft: '#9ca3af', classified: '#3b82f6', filed: '#8b5cf6', assessing: '#f59e0b', rectifying: '#f97316', completed: '#22c55e' };
@@ -12,7 +13,22 @@ export default function Dashboard() {
 
   useEffect(() => { apiGet('/api/dashboard/stats').then(setStats); }, []);
 
-  if (!stats) return <div className="page-body">加载中...</div>;
+  if (!stats) return (
+    <div>
+      <div className="page-header"><h2>工作台</h2></div>
+      <div className="page-body">
+        <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+          {Array.from({ length: 5 }).map((_, i) => <div key={i} className="stat-card"><SkeletonCard lines={2} /></div>)}
+        </div>
+        <div className="charts-row">
+          <SkeletonCard lines={1} />
+          <SkeletonCard lines={1} />
+        </div>
+        <SkeletonTable rows={3} cols={6} />
+        <SkeletonTable rows={3} cols={7} />
+      </div>
+    </div>
+  );
 
   const levelData = (stats.levelDistribution || []).map(d => ({ name: `等级${d.security_level}`, value: d.cnt, level: d.security_level }));
   const statusData = (stats.statusDistribution || []).map(d => ({ name: STATUS_LABELS[d.status] || d.status, value: d.cnt, status: d.status }));

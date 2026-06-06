@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Upload, X, Image, Download } from 'lucide-react';
-import { apiGet, apiPost, apiPut, apiDelete, apiUpload, hasPermission } from '../api';
-import { PageShell, Toolbar, FilterSelect, EmptyState, Modal } from '../components';
+import { apiGet, apiPost, apiPut, apiDelete, apiUpload, hasPermission, fetchBlobUrl } from '../api';
+import { PageShell, Toolbar, FilterSelect, EmptyState, Modal, AuthImage, ConfirmDialog } from '../components';
+import { useToast } from '../hooks/useToast';
 
 const STATUS_LABELS = { preparing: '准备中', submitted: '已提交', approved: '已审批', rejected: '已驳回' };
 const STATUS_CLASS = { preparing: 'badge-gray', submitted: 'badge-blue', approved: 'badge-green', rejected: 'badge-red' };
@@ -16,6 +17,9 @@ export default function Filing() {
   const [filterYear, setFilterYear] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [years, setYears] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const toast = useToast();
   const [form, setForm] = useState({ system_id:'', filing_number:'', filing_authority:'', filing_date:'', approval_date:'', filing_status:'preparing', filing_year:new Date().getFullYear(), remarks:'' });
 
   const loadFilings = () => {
@@ -35,17 +39,40 @@ export default function Filing() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    editing ? await apiPut('/api/filings/'+editing.id, form) : await apiPost('/api/filings', form);
-    setShowModal(false); setEditing(null); loadFilings();
+    setSubmitting(true);
+    try {
+      editing ? await apiPut('/api/filings/'+editing.id, form) : await apiPost('/api/filings', form);
+      setShowModal(false); setEditing(null);
+      toast.success(editing ? '备案已更新' : '备案已创建');
+      loadFilings();
+    } catch (err) {
+      toast.error(err.message || '操作失败');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleDelete = async (id) => { if(!confirm('确定删除？'))return; await apiDelete('/api/filings/'+id); loadFilings(); };
+  const handleDelete = async () => {
+    try {
+      await apiDelete('/api/filings/' + deleteTarget);
+      toast.success('备案已删除');
+      loadFilings();
+    } catch (err) {
+      toast.error(err.message || '删除失败');
+    }
+    setDeleteTarget(null);
+  };
 
   const handleUpload = async (filingId) => {
     const input = document.createElement('input'); input.type='file'; input.accept='image/*'; input.multiple=true;
     input.onchange = async (e) => {
       if(!e.target.files.length)return; setUploading(true);
-      for(const f of e.target.files){ const fd=new FormData(); fd.append('file',f); await apiUpload('/api/filings/'+filingId+'/evidences',fd); }
+      try {
+        for(const f of e.target.files){ const fd=new FormData(); fd.append('file',f); await apiUpload('/api/filings/'+filingId+'/evidences',fd); }
+        toast.success('证明已上传');
+      } catch (err) {
+        toast.error('上传失败');
+      }
       setUploading(false); apiGet('/api/filings/'+filingId+'/evidences').then(setEvidences);
     };
     input.click();
@@ -85,7 +112,7 @@ export default function Filing() {
                   <td><div className="toolbar">
                     {f.proof_image_count>0 && <span className="badge badge-green" style={{cursor:'pointer'}} onClick={() => openEdit(f)} title="查看证明"><Image size={12} /> {f.proof_image_count}</span>}
                     {hasPermission('filing:edit') && <button className="btn btn-sm" onClick={() => openEdit(f)}><Edit2 size={13} /></button>}
-                    {hasPermission('filing:delete') && <button className="btn btn-sm btn-danger" onClick={() => handleDelete(f.id)}><X size={13} /></button>}
+                    {hasPermission('filing:delete') && <button className="btn btn-sm btn-danger" onClick={() => setDeleteTarget(f.id)}><X size={13} /></button>}
                   </div></td>
                 </tr>
               ))}
@@ -95,7 +122,7 @@ export default function Filing() {
       </div>
 
       <Modal open={showModal} onClose={() => setShowModal(false)} title={editing?'编辑备案':'新建备案'} width="600px"
-        footer={<><button className="btn" onClick={() => setShowModal(false)}>取消</button><button className="btn btn-primary" onClick={handleSubmit}>{editing?'保存':'创建'}</button></>}
+        footer={<><button className="btn" onClick={() => setShowModal(false)} disabled={submitting}>取消</button><button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>{submitting ? '保存中...' : (editing?'保存':'创建')}</button></>}
       >
         <form onSubmit={handleSubmit}>
           {!editing && <div className="form-group"><label>信息系统 *</label><select className="form-control" required value={form.system_id} onChange={e=>setForm({...form,system_id:e.target.value})}><option value="">请选择</option>{systems.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>}
@@ -122,9 +149,13 @@ export default function Filing() {
                   <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(100px, 1fr))',gap:'8px',marginTop:'12px'}}>
                     {evidences.map(ev=>(
                       <div key={ev.id} style={{position:'relative',borderRadius:'8px',overflow:'hidden',border:'1px solid var(--separator)',background:'#fff'}}>
-                        <img src={'/api/filings/'+editing.id+'/evidences/'+ev.id+'/file?token='+localStorage.getItem('djcp_token')} alt={ev.original_name}
+                        <AuthImage
+                          url={'/api/filings/'+editing.id+'/evidences/'+ev.id+'/file'}
                           style={{width:'100%',height:'80px',objectFit:'cover',cursor:'pointer'}}
-                          onClick={()=>window.open('/api/filings/'+editing.id+'/evidences/'+ev.id+'/file?token='+localStorage.getItem('djcp_token'),'_blank')} />
+                          onClick={async () => {
+                            const u = await fetchBlobUrl('/api/filings/'+editing.id+'/evidences/'+ev.id+'/file');
+                            window.open(u, '_blank');
+                          }} />
                         <button type="button" onClick={()=>deleteEvidence(editing.id,ev.id)}
                           style={{position:'absolute',top:'3px',right:'3px',width:'20px',height:'20px',borderRadius:'50%',background:'rgba(255,59,48,0.85)',color:'#fff',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
                           <X size={10} /></button>
@@ -138,6 +169,16 @@ export default function Filing() {
           )}
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="删除备案"
+        message="确定要删除该备案记录吗？此操作不可撤销。"
+        confirmText="删除"
+        danger
+      />
     </PageShell>
   );
 }

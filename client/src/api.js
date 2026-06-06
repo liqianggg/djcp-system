@@ -48,6 +48,28 @@ export async function apiUpload(url, formData) {
   return res.json();
 }
 
+// Fetch a file/resource with auth and return as blob URL (for images, PDFs, etc.)
+// Returns an object URL that must be revoked with URL.revokeObjectURL() when done
+export async function fetchBlobUrl(url) {
+  const res = await request(url);
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
+// Fetch as blob and trigger download
+export async function fetchDownload(url, filename) {
+  const res = await request(url);
+  const blob = await res.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = filename || '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+}
+
 export function hasPermission(code) {
   try {
     const user = JSON.parse(localStorage.getItem('djcp_user') || '{}');

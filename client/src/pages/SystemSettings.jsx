@@ -28,8 +28,17 @@ export default function SystemSettings() {
     alert('配置已保存');
   };
 
+  const [theme, setTheme] = useState(localStorage.getItem('djcp_theme') || 'light');
+
+  const toggleTheme = (t) => {
+    setTheme(t);
+    localStorage.setItem('djcp_theme', t);
+    document.documentElement.setAttribute('data-theme', t);
+  };
+
   const tabs = [
     { key: 'ldap', icon: <Server size={14} />, label: 'LDAP/AD 域控' },
+    { key: 'appearance', icon: <Shield size={14} />, label: '外观主题' },
     { key: 'storage', icon: <FolderOpen size={14} />, label: '存储配置' },
     { key: 'system', icon: <Database size={14} />, label: '系统信息' },
     { key: 'security', icon: <Shield size={14} />, label: '安全策略' },
@@ -224,6 +233,45 @@ export default function SystemSettings() {
                       )}
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'appearance' && (
+          <div className="card">
+            <div className="card-header">外观主题</div>
+            <div className="card-body">
+              <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
+                选择界面主题配色，设置即时生效并自动保存。
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div
+                  onClick={() => toggleTheme('light')}
+                  style={{
+                    padding: '24px', borderRadius: '12px', cursor: 'pointer',
+                    border: theme === 'light' ? '2px solid var(--blue)' : '2px solid var(--separator)',
+                    background: '#fff', textAlign: 'center',
+                    boxShadow: theme === 'light' ? '0 0 0 3px rgba(0,122,255,0.15)' : 'none'
+                  }}
+                >
+                  <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg, #f59e0b, #fbbf24)', margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>☀️</div>
+                  <div style={{ fontWeight: 600, marginBottom: '4px' }}>浅色模式</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>明亮、清新的界面风格</div>
+                </div>
+                <div
+                  onClick={() => toggleTheme('dark')}
+                  style={{
+                    padding: '24px', borderRadius: '12px', cursor: 'pointer',
+                    border: theme === 'dark' ? '2px solid var(--blue)' : '2px solid var(--separator)',
+                    background: '#1c1c1e', textAlign: 'center', color: '#f5f5f7',
+                    boxShadow: theme === 'dark' ? '0 0 0 3px rgba(0,122,255,0.3)' : 'none'
+                  }}
+                >
+                  <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>🌙</div>
+                  <div style={{ fontWeight: 600, marginBottom: '4px' }}>深色模式</div>
+                  <div style={{ fontSize: '12px', color: '#98989d' }}>柔和护眼的暗色界面</div>
                 </div>
               </div>
             </div>

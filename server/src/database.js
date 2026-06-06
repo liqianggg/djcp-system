@@ -33,7 +33,7 @@ function wrapDb(sqlDb) {
         run(...params) {
           try {
             const stmt = sqlDb.prepare(sql);
-            stmt.bind(params.flat());
+            stmt.bind(params.flat().map(v => v === undefined ? null : v));
             stmt.step();
             stmt.free();
             const rows = sqlDb.exec("SELECT last_insert_rowid()");
@@ -42,6 +42,7 @@ function wrapDb(sqlDb) {
             save();
             return { lastInsertRowid: lastId, changes };
           } catch (e) {
+            console.error('DB run error:', e.message, 'SQL:', sql.slice(0, 120));
             save();
             return { lastInsertRowid: 0, changes: 0 };
           }
@@ -129,6 +130,10 @@ async function initDb() {
   try { db.run("ALTER TABLE users ADD COLUMN phone TEXT"); } catch (_) {}
   try { db.run("ALTER TABLE users ADD COLUMN email TEXT"); } catch (_) {}
   try { db.run("ALTER TABLE users ADD COLUMN ldap_dn TEXT"); } catch (_) {}
+  try { db.run("ALTER TABLE classifications ADD COLUMN classified_by_id INTEGER REFERENCES users(id)"); } catch (_) {}
+  try { db.run("ALTER TABLE rectifications ADD COLUMN responsible_person_id INTEGER REFERENCES users(id)"); } catch (_) {}
+  try { db.run("ALTER TABLE documents ADD COLUMN keywords TEXT DEFAULT ''"); } catch (_) {}
+  try { db.run("ALTER TABLE documents ADD COLUMN updated_at DATETIME"); } catch (_) {}
 
   // Save after initialization
   const data = db.export();
